@@ -2,7 +2,7 @@
 # The Playwright image ships Chromium, Firefox and WebKit plus their system libraries
 # for amd64 and arm64. Only Firefox and WebKit decode H.264/H.265, so the e2e check
 # uses Firefox; bundled Chromium would need MJPEG.
-FROM mcr.microsoft.com/playwright/python:v1.55.0-noble
+FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /repo
