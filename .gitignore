@@ -1,0 +1,51 @@
+# ---- Secrets, and anything holding them -------------------------------------------
+# .env holds the NVR's password and the API token. Only the two examples are tracked.
+.env
+.env.*
+!.env.example
+!.env.dev.example
+# Secrets read from files (NVR_PASSWORD_FILE and friends).
+*.secret
+secrets.json
+# Settings written at runtime. In Docker these live in a volume; outside it they land
+# wherever VIEWPORT_STATE_FILE and VIEWPORT_SECRETS_FILE point, which may be here.
+viewport-state.json
+# TLS material for a reverse proxy in front of the wall.
+*.pem
+*.key
+*.crt
+*.p12
+
+# ---- Test and run output ----------------------------------------------------------
+# Screenshots from the browser suite and the smoke check: these show real cameras.
+e2e-output/
+*.log
+
+# ---- Python -----------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+build/
+dist/
+# Nothing here needs a local environment: the tests run in containers.
+.venv/
+venv/
+
+# ---- Editors and operating systems ------------------------------------------------
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp
+*~
+.claude/settings.local.json
+
+# ---- Working files, kept out of the published repository --------------------------
+# Session notes, house rules, background research, and a bundle of the history from
+# before this repository was made public.
+internal/

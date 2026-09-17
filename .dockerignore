@@ -1,0 +1,13 @@
+# Applies to builds whose context is the repo root (tests/Dockerfile).
+# agent/ and mock-nvr/ build from their own contexts and have their own files.
+.git/
+.venv/
+e2e-output/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+# Never bake credentials into an image layer.
+.env
+# Working files, never published or built into an image.
+internal/

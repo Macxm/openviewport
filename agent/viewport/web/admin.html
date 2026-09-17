@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111317">
+  <meta name="referrer" content="no-referrer">
+  <title>OpenViewport admin</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>OpenViewport <span>admin</span></h1>
+    <div class="topbar-actions">
+      <button id="lock-button" type="button" hidden></button>
+      <a href="/" id="wall-link" class="button">Open the wall</a>
+    </div>
+  </header>
+  <p id="banner" role="alert" hidden></p>
+
+  <div id="guide-head" hidden></div>
+
+  <div class="shell" id="shell" hidden>
+    <nav id="tabs" aria-label="Sections"></nav>
+
+    <main id="panels">
+      <!-- Disabled while the page is locked, which disables every control inside it at once. -->
+      <fieldset id="lockable">
+        <legend class="visually-hidden">Settings</legend>
+
+        <section class="panel" id="panel-welcome" hidden>
+          <header class="panel-head">
+            <h2>Let's set up this screen</h2>
+            <p class="hint">Four short steps. Nothing here is final: every setting can be changed
+              later.</p>
+          </header>
+          <ol class="guide-steps">
+            <li><strong>Protect the settings</strong><span>A password, so only you can change them.</span></li>
+            <li><strong>Connect your cameras</strong><span>Your NVR, a camera, or stream addresses.</span></li>
+            <li><strong>Name and order them</strong><span>The most important camera gets the biggest tile.</span></li>
+            <li><strong>Choose what the wall shows</strong><span>Which cameras, in which layout.</span></li>
+          </ol>
+        </section>
+
+        <section class="panel" id="panel-sources" hidden>
+          <header class="panel-head">
+            <h2>Sources</h2>
+            <p class="hint">Where the cameras come from: an NVR, a camera, or stream addresses.</p>
+          </header>
+          <div id="sources" class="stack"></div>
+          <div class="panel-actions">
+            <button id="add-source" type="button">Add a source</button>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-cameras" hidden>
+          <header class="panel-head">
+            <h2>Cameras</h2>
+            <p class="hint">Rename a camera, keep it off the wall, or choose its video quality. The
+              order matters: the first camera gets the biggest tile.</p>
+          </header>
+          <div id="cameras" class="stack"></div>
+        </section>
+
+        <section class="panel" id="panel-views" hidden>
+          <header class="panel-head">
+            <h2>Views</h2>
+            <p class="hint">What the wall shows. Switch between views with <kbd>[</kbd> and
+              <kbd>]</kbd> on the wall.</p>
+          </header>
+          <div id="views" class="stack"></div>
+          <div class="panel-actions">
+            <button id="add-view" type="button">Add a view</button>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-layouts" hidden>
+          <header class="panel-head">
+            <h2>Layouts</h2>
+            <p class="hint">Tile arrangements of your own, offered alongside the built-in ones.</p>
+          </header>
+          <div id="layouts" class="stack"></div>
+          <div class="panel-actions">
+            <button id="add-layout" type="button">Add a layout</button>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-display" hidden>
+          <header class="panel-head">
+            <h2>Display</h2>
+            <p class="hint">How the wall looks, on every screen showing it.</p>
+          </header>
+          <div id="display" class="stack"></div>
+        </section>
+
+        <section class="panel" id="panel-detection" hidden>
+          <header class="panel-head">
+            <h2>Detection</h2>
+            <p class="hint">Bring a camera forward when it sees something. The NVR or camera does the
+              detecting; nothing is analysed on this device.</p>
+          </header>
+          <div id="detection" class="stack"></div>
+        </section>
+
+        <section class="panel" id="panel-device" hidden>
+          <header class="panel-head">
+            <h2>This device</h2>
+            <p class="hint">How many streams this screen plays, which is what protects the NVR. The
+              defaults suit a Raspberry Pi.</p>
+          </header>
+          <div id="device" class="stack"></div>
+        </section>
+
+        <section class="panel" id="panel-security" hidden>
+          <header class="panel-head">
+            <h2>Security</h2>
+            <p class="hint">Who can change these settings, and who can watch the wall.</p>
+          </header>
+          <div id="security" class="stack"></div>
+        </section>
+
+        <section class="panel" id="panel-done" hidden>
+          <header class="panel-head">
+            <h2>You're all set</h2>
+            <p class="hint">The wall is showing your cameras. Everything you chose can be changed
+              here at any time.</p>
+          </header>
+          <div class="panel-actions">
+            <a id="done-wall" class="button primary" href="/">Open the wall</a>
+            <button id="done-settings" type="button">Go to settings</button>
+          </div>
+        </section>
+      </fieldset>
+    </main>
+  </div>
+
+  <div id="guide-foot" hidden></div>
+
+  <div id="savebar" role="region" aria-label="Unsaved changes" hidden>
+    <p id="savebar-text"></p>
+    <div class="bar-buttons">
+      <button id="discard" type="button" class="quiet">Discard</button>
+      <button id="save" type="button" class="primary">Save</button>
+    </div>
+  </div>
+
+  <div id="lockbar" role="region" aria-label="Settings are locked" hidden>
+    <p><span class="icon-inline" id="lockbar-icon"></span>Settings are locked.</p>
+    <div class="bar-buttons">
+      <button id="lockbar-unlock" type="button" class="primary">Unlock to change</button>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="unlock-dialog" aria-labelledby="unlock-title">
+    <form id="unlock-form">
+      <h2 id="unlock-title">Unlock settings</h2>
+      <p class="hint" id="unlock-reason">Enter the admin password to change settings.</p>
+      <label class="stacked">Username
+        <input type="text" id="unlock-user" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </label>
+      <label class="stacked">Password
+        <input type="password" id="unlock-pass" autocomplete="current-password" required>
+      </label>
+      <p class="form-error" id="unlock-error" role="alert" hidden></p>
+      <div class="dialog-buttons">
+        <button type="button" id="unlock-cancel" class="quiet">Cancel</button>
+        <button type="submit" id="unlock-submit" class="primary">Unlock</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/static/admin.js"></script>
+</body>
+</html>

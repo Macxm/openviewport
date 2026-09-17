@@ -1,0 +1,227 @@
+:root {
+  --gap: 2px;
+  --bg: #000;
+  --tile-bg: #0b0d10;
+  --text: #f2f4f7;
+  --muted: #9aa3ad;
+  --accent: #3b82f6;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+body.idle { cursor: none; }
+
+#wall {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  gap: var(--gap);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.tile {
+  position: relative;
+  overflow: hidden;
+  background: var(--tile-bg);
+  cursor: pointer;
+  outline: none;
+}
+
+.tile.selected { box-shadow: inset 0 0 0 3px var(--accent); }
+
+/* Full screen: the chosen tile covers the wall; the rest stay mounted (and warm) underneath. */
+#wall.has-fullscreen .tile { opacity: 0; pointer-events: none; }
+#wall.has-fullscreen .tile.fullscreen {
+  opacity: 1;
+  pointer-events: auto;
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+}
+
+.tile .media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: var(--fit, contain);
+  background: transparent;
+  transition: opacity 120ms linear;
+}
+
+.tile .media.pending { opacity: 0; }
+
+.tile .label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 10px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+  font-size: clamp(11px, 1.3vw, 15px);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tile .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.tile .badge {
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--muted);
+}
+
+.tile .badge.main { background: var(--accent); color: #fff; }
+
+.tile .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+
+.tile[data-state="playing"] .dot { background: var(--ok); }
+.tile[data-state="connecting"] .dot { background: var(--warn); }
+.tile[data-state="error"] .dot { background: var(--bad); }
+
+.tile .placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 12px;
+  color: var(--muted);
+  font-size: clamp(11px, 1.2vw, 15px);
+  z-index: 1;
+}
+
+.tile .spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#hud {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  max-width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(10, 12, 16, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+}
+
+#hud h2 { margin: 0 0 6px; font-size: 13px; }
+#hud table { border-collapse: collapse; width: 100%; }
+#hud td, #hud th { padding: 2px 8px 2px 0; text-align: left; white-space: nowrap; }
+#hud th { color: var(--muted); font-weight: 500; }
+#hud .keys { margin-top: 8px; color: var(--muted); }
+
+#toast, #banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(10, 12, 16, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#toast { bottom: 24px; }
+#banner { top: 16px; color: var(--warn); }
+
+/* ---- detections ------------------------------------------------------------- */
+
+/* A tile whose camera currently detects something: a coloured edge and a chip.
+   The edge is an overlay: an inset box-shadow on the tile paints beneath the video. */
+.tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  border: 0 solid transparent;
+}
+.tile.detected::after { border-width: 4px; border-color: var(--warn); }
+.tile.detected.person::after,
+.tile.detected.vehicle::after { border-color: var(--bad); }
+#wall.has-fullscreen .tile.fullscreen.detected::after { border-width: 6px; }
+
+.tile .badge.detection { background: var(--warn); color: #111; }
+.tile .badge.detection.alert { background: var(--bad); color: #fff; }
+/* Names can be switched off while detections still show, so the row needs a floor. */
+body.no-labels .tile .label { display: flex; background: none; padding-bottom: 8px; }
+body.no-labels .tile .label .dot,
+body.no-labels .tile .label .name { display: none; }
+
+/* The camera a detection made primary: say why, and how to go back. */
+.tile .focus-note {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  padding: 5px 11px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  font-size: clamp(11px, 1.2vw, 14px);
+  pointer-events: none;
+}
+.tile:not(.focused) .focus-note { display: none; }
+
+/* ---- display settings ------------------------------------------------------- */
+
+body.no-labels .tile .label { display: none; }
+body.no-badges .tile .badge { display: none; }
+/* An offline camera's tile stays dark instead of explaining itself. */
+body.blank-offline .tile[data-state="idle"] .placeholder { display: none; }
+
+#clock {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-size: clamp(13px, 1.6vw, 20px);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}

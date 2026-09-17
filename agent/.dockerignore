@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+# Never bake credentials or saved settings into an image layer.
+.env
+*.env
+secrets.json
+viewport-state.json

@@ -1,0 +1,286 @@
+# Viewport.
+#
+#   cp .env.example .env          then set your NVR, VIEWPORT_API_TOKEN and an admin password
+#   docker compose up -d --build  the wall on http://localhost:8080, settings on /admin
+#
+# COMPOSE_PROFILES=mock in .env also starts a mock Reolink NVR (the .env.example default),
+# and docker-compose.dev.yml adds conveniences for working on the code. Tests are services
+# too (profile "test"), so nothing needs installing on the host: see "Tests" below.
+#
+# Security, in the order it matters (docs/security.md):
+# * Only the agent is published, and on loopback unless VIEWPORT_BIND says otherwise. go2rtc
+#   is never published: its API returns stream URLs with the camera passwords in them.
+# * Every service runs with a read-only filesystem, no Linux capabilities (the mock NVR keeps
+#   the one it needs to listen on ports 80 and 554) and no way to gain privileges, as a
+#   non-root user where the image allows. Logs are capped, which an SD card needs.
+# The stack's name, which also names the volume its settings live in. It ignores the directory
+# on purpose, so an unpacked zip is still "viewport" — which means a SECOND copy of the project
+# on one machine must set COMPOSE_PROJECT_NAME in its .env, or `up` there takes over this
+# stack's containers and shares its settings and secrets.
+name: ${COMPOSE_PROJECT_NAME:-viewport}
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp"]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+# go2rtc with its output passed through the agent's redactor (standard library only) before
+# `docker logs` sees it: go2rtc prints source URLs, passwords included, when a stream fails.
+# tini -g signals the whole pipeline, so go2rtc still stops cleanly.
+x-go2rtc: &go2rtc
+  <<: *hardened
+  image: alexxit/go2rtc:1.9.14
+  user: "10001:10001"
+  entrypoint: ["/sbin/tini", "-g", "--", "sh", "-c"]
+  command:
+    - set -o pipefail; go2rtc -config /config/go2rtc.yaml 2>&1 | python3 -u /opt/viewport/credentials.py
+  volumes:
+    - ./config/go2rtc.yaml:/config/go2rtc.yaml:ro
+    - ./agent/viewport/credentials.py:/opt/viewport/credentials.py:ro
+  healthcheck:
+    test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:1984/api', timeout=3)"]
+    interval: 10s
+    timeout: 5s
+    retries: 6
+
+x-agent-health: &agent-health
+  test: ["CMD", "python", "-c",
+         "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+  interval: 5s
+  timeout: 5s
+  retries: 24
+  start_period: 5s
+
+x-mock-nvr: &mock-nvr
+  <<: *hardened
+  image: viewport/mock-nvr:local
+  build: ./mock-nvr
+  # Listens on 80 and 554 as the image's root user, so it keeps that one capability.
+  cap_add: [NET_BIND_SERVICE]
+  # It writes the scripts that generate its test patterns to /tmp and runs them, so its /tmp
+  # cannot be noexec like everyone else's. It is a test double, never part of an installation.
+  tmpfs: ["/tmp:exec,mode=1777"]
+
+volumes:
+  viewport-state:
+
+services:
+  go2rtc:
+    <<: *go2rtc
+    restart: unless-stopped
+
+  agent:
+    <<: *hardened
+    image: viewport/agent:local
+    build: ./agent
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # VIEWPORT_PORT in .env is the HOST side of the mapping below. Inside the container the
+      # wall is always on 8080, which is what that mapping and the healthcheck expect. Pinned
+      # here because the agent reads these two itself (viewport/__main__.py) and the whole of
+      # .env reaches it through env_file: otherwise changing the published port moves the
+      # listener out from under the mapping and the wall answers nothing at all.
+      VIEWPORT_HOST: 0.0.0.0
+      VIEWPORT_PORT: 8080
+      VIEWPORT_CONFIG: /config/viewport.yaml
+      VIEWPORT_STATE_FILE: /data/viewport-state.json
+      # Credentials for sources added in the admin page, and an admin password chosen
+      # there, kept apart from the settings above (docs/credentials.md).
+      VIEWPORT_SECRETS_FILE: /data/secrets.json
+      GO2RTC_API_URL: http://go2rtc:1984
+    volumes:
+      - ./config/viewport.yaml:/config/viewport.yaml:ro
+      - viewport-state:/data
+    ports:
+      # Loopback unless you say otherwise: a TV elsewhere on the LAN needs
+      # VIEWPORT_BIND=0.0.0.0, and then VIEWPORT_API_TOKEN and an admin password too.
+      - "${VIEWPORT_BIND:-127.0.0.1}:${VIEWPORT_PORT:-8080}:8080"
+    depends_on:
+      go2rtc:
+        condition: service_healthy
+    healthcheck: *agent-health
+
+  mock-nvr:
+    <<: *mock-nvr
+    profiles: ["mock"]
+    restart: unless-stopped
+    environment:
+      # Deliberately not NVR_USERNAME/NVR_PASSWORD: pointing the agent at a real NVR
+      # must not copy its credentials into this container's environment.
+      MOCK_USERNAME: ${MOCK_USERNAME:-admin}
+      MOCK_PASSWORD: ${MOCK_PASSWORD:-mockpass}
+      MOCK_CHANNELS: ${MOCK_CHANNELS:-4}
+      MOCK_MAIN_CODEC: ${MOCK_MAIN_CODEC:-h264}
+      MOCK_OFFLINE_CHANNELS: ${MOCK_OFFLINE_CHANNELS:-}
+      MOCK_EMPTY_CHANNELS: ${MOCK_EMPTY_CHANNELS:-}
+      MOCK_HTTP_ENABLED: ${MOCK_HTTP_ENABLED:-true}
+    ports:
+      - "127.0.0.1:8081:80"     # the mock's info page, its API, and /mock/detect
+      - "127.0.0.1:8554:554"    # its RTSP streams (open in VLC)
+
+  # ---- Tests (profile "test": never started by `up`) --------------------------------------
+  #   docker compose --profile test run --rm unit     unit and API tests
+  #   docker compose --profile test run --rm lint     JS syntax and tests, YAML, redaction parity
+  #   docker compose --profile test run --rm audit    pinned dependencies against advisories
+  #   sh scripts/e2e.sh                               browser regression suite, on its own stack
+  #   docker compose --profile test run --rm smoke    a quick check of *your running* wall
+  # Extra arguments replace a service's `command`: `run --rm unit agent/tests -k budget`.
+
+  unit:
+    <<: &tests
+      profiles: ["test"]
+      image: viewport/tests:local
+      build:
+        context: .
+        dockerfile: tests/Dockerfile
+      volumes:
+        - .:/repo:ro
+      working_dir: /repo
+    # -p no:cacheprovider: /repo is mounted read-only, so pytest cannot write its cache.
+    entrypoint: ["pytest", "-q", "-p", "no:cacheprovider"]
+    command: ["agent/tests"]
+
+  lint:
+    <<: *tests
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        for f in agent/viewport/web/*.js; do node --check "$$f"; done
+        echo "JS syntax OK"
+        node agent/tests/js/test_redact.js
+        node agent/tests/js/test_admin_logic.js
+        python - <<'PY'
+        import pathlib, yaml
+        for f in ["docker-compose.yml", "docker-compose.dev.yml", "config/go2rtc.yaml",
+                  "config/go2rtc.prod.yaml", "config/viewport.yaml", "tests/e2e/fresh.yaml",
+                  ".github/workflows/ci.yml"]:
+            yaml.safe_load(pathlib.Path(f).read_text())
+            print(f"YAML OK: {f}")
+        PY
+
+  # Needs the network, so it is separate from lint, which must work offline.
+  audit:
+    <<: *tests
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        pip-audit --strict --disable-pip --requirement agent/requirements.lock.txt
+        echo "no known vulnerabilities in the pinned runtime dependencies"
+
+  # A quick check of the wall that is running now, whatever it is pointed at: it plays, full
+  # screen switches to HD, the admin page loads. It briefly changes what the shared wall shows.
+  smoke:
+    <<: *tests
+    volumes:
+      - .:/repo:ro
+      - ./e2e-output:/out
+    env_file:
+      - path: .env               # VIEWPORT_API_TOKEN, when the wall needs one
+        required: false
+    environment:
+      # Here, not in `command`: extra arguments replace `command`, and a run with
+      # `--timeout 60` must not silently fall back to Chromium, which cannot decode H.264/H.265.
+      E2E_BROWSER: firefox
+    entrypoint: ["python", "scripts/e2e_check.py", "--url", "http://agent:8080", "--out", "/out"]
+    command: []
+    depends_on:
+      agent:
+        condition: service_healthy
+
+  # ---- The regression suite's own stack: a mock NVR and two agents, nothing published ------
+  # scripts/e2e.sh runs it as a separate compose project and removes it afterwards, so it never
+  # touches your running wall, your NVR or your settings.
+
+  e2e-nvr:
+    <<: *mock-nvr
+    profiles: ["test"]
+    environment:
+      MOCK_USERNAME: admin
+      MOCK_PASSWORD: e2e-nvr-password
+      MOCK_CHANNELS: "4"
+      MOCK_OFFLINE_CHANNELS: "3"
+
+  e2e-go2rtc:
+    <<: *go2rtc
+    profiles: ["test"]
+
+  # Set up like a real install: the product's viewport.yaml, a token and an admin password.
+  e2e-agent:
+    <<: *hardened
+    profiles: ["test"]
+    image: viewport/agent:local
+    build: ./agent
+    tmpfs: ["/tmp", "/data:mode=1777"]
+    environment:
+      VIEWPORT_CONFIG: /config/viewport.yaml
+      VIEWPORT_STATE_FILE: /data/state.json
+      VIEWPORT_SECRETS_FILE: /data/secrets.json
+      VIEWPORT_NAME: E2E wall
+      GO2RTC_API_URL: http://e2e-go2rtc:1984
+      NVR_TYPE: reolink
+      NVR_HOST: e2e-nvr
+      NVR_USERNAME: admin
+      NVR_PASSWORD: e2e-nvr-password
+      VIEWPORT_API_TOKEN: e2e-wall-token-4f1c9a
+      VIEWPORT_ADMIN_PASSWORD: e2e-admin-password
+    volumes:
+      - ./config/viewport.yaml:/config/viewport.yaml:ro
+    depends_on:
+      e2e-go2rtc:
+        condition: service_healthy
+    healthcheck: *agent-health
+
+  e2e-go2rtc-fresh:
+    <<: *go2rtc
+    profiles: ["test"]
+
+  # A first run: no sources, no token, no password, nothing saved. The setup guide's test.
+  e2e-agent-fresh:
+    <<: *hardened
+    profiles: ["test"]
+    image: viewport/agent:local
+    build: ./agent
+    tmpfs: ["/tmp", "/data:mode=1777"]
+    environment:
+      VIEWPORT_CONFIG: /config/viewport.yaml
+      VIEWPORT_STATE_FILE: /data/state.json
+      VIEWPORT_SECRETS_FILE: /data/secrets.json
+      GO2RTC_API_URL: http://e2e-go2rtc-fresh:1984
+    volumes:
+      - ./tests/e2e/fresh.yaml:/config/viewport.yaml:ro
+    depends_on:
+      e2e-go2rtc-fresh:
+        condition: service_healthy
+    healthcheck: *agent-health
+
+  e2e:
+    <<: *tests
+    volumes:
+      - .:/repo:ro
+      - ./e2e-output:/out          # screenshots of failures (git-ignored)
+    environment:
+      E2E_OUT: /out
+      E2E_WALL: http://e2e-agent:8080
+      E2E_FRESH: http://e2e-agent-fresh:8080
+      E2E_NVR: http://e2e-nvr
+      E2E_TOKEN: e2e-wall-token-4f1c9a
+      E2E_ADMIN_PASSWORD: e2e-admin-password
+      E2E_NVR_PASSWORD: e2e-nvr-password
+    entrypoint: ["pytest", "-p", "no:cacheprovider", "tests/e2e"]
+    command: ["-q"]
+    depends_on:
+      e2e-agent:
+        condition: service_healthy
+      e2e-agent-fresh:
+        condition: service_healthy
+      e2e-nvr:
+        condition: service_started

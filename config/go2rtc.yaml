@@ -1,0 +1,22 @@
+# go2rtc: the stream relay, inside the compose network.
+# Camera streams are added at runtime by the agent (with PATCH), never stored here.
+log:
+  level: info
+
+api:
+  listen: ":1984"
+  # No `origin`: go2rtc then refuses WebSockets from other origins and sends no CORS headers,
+  # so no web page can read its API, which answers with source URLs, passwords included.
+  # The wall does not need it: video is relayed by the agent (player_transport: proxy).
+
+rtsp:
+  # Re-streamed RTSP for a native renderer on the same network. Not published.
+  listen: ":8554"
+
+webrtc:
+  listen: ""
+
+srtp:
+  listen: ""
+
+streams: {}

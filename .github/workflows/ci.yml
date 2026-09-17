@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same commands a developer runs locally: everything is containerised, so CI needs
+      # no Python, Node or browser of its own.
+      - name: Unit and API tests
+        run: docker compose --profile test run --rm unit
+
+      - name: Lint (JS syntax and tests, YAML, redaction parity)
+        run: docker compose --profile test run --rm lint
+
+      - name: Audit the pinned dependencies
+        run: docker compose --profile test run --rm audit
+
+      # The browser regression suite, on its own stack with a mock NVR (Firefox, real MSE).
+      - name: End-to-end regression suite
+        run: sh scripts/e2e.sh
+
+      - name: Screenshots of failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failures
+          path: e2e-output/
+          if-no-files-found: ignore

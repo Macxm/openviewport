@@ -1,0 +1,62 @@
+[
+  {
+    "name": "rtsp userinfo",
+    "input": "rtsp://viewer:u2%26%21yZ@192.0.2.10:554/Preview_01_main",
+    "expected": "rtsp://***@192.0.2.10:554/Preview_01_main"
+  },
+  {
+    "name": "unencoded @ in password",
+    "input": "rtsp://admin:p@ss@nvr.local:554/x",
+    "expected": "rtsp://***@nvr.local:554/x"
+  },
+  {
+    "name": "flv query password",
+    "input": "https://nvr.local/flv?port=1935&app=bcs&stream=channel0_sub.bcs&user=viewer&password=u2%26%21yZ",
+    "expected": "https://nvr.local/flv?port=1935&app=bcs&stream=channel0_sub.bcs&user=viewer&password=***"
+  },
+  {
+    "name": "reolink session token",
+    "input": "for url 'https://nvr.local/cgi-bin/api.cgi?cmd=GetEnc&token=6c5f1a2b3c4d'",
+    "expected": "for url 'https://nvr.local/cgi-bin/api.cgi?cmd=GetEnc&token=***'"
+  },
+  {
+    "name": "go2rtc PATCH, encoded src",
+    "input": "http://go2rtc:1984/api/streams?name=nvr_0_main&src=rtsp%3A%2F%2Fviewer%3Au2%2526%2521yZ%2540g%40nvr%3A554%2FPreview_01_main",
+    "expected": "http://go2rtc:1984/api/streams?name=nvr_0_main&src=rtsp%3A%2F%2F***%40nvr%3A554%2FPreview_01_main"
+  },
+  {
+    "name": "go2rtc PATCH, encoded flv",
+    "input": "http://go2rtc:1984/api/streams?name=nvr_0_sub&src=http%3A%2F%2Fnvr%2Fflv%3Fapp%3Dbcs%26user%3Dviewer%26password%3Du2%2526%2521yZ%26x%3D1",
+    "expected": "http://go2rtc:1984/api/streams?name=nvr_0_sub&src=http%3A%2F%2Fnvr%2Fflv%3Fapp%3Dbcs%26user%3Dviewer%26password%3D***%26x%3D1"
+  },
+  {
+    "name": "go2rtc log line",
+    "input": "ERR rtmp.go:166 > error=\"streams: Get \\\"https://nvr.local/flv?port=1935&user=viewer&password=u2%26%21yZ\\\": EOF\"",
+    "expected": "ERR rtmp.go:166 > error=\"streams: Get \\\"https://nvr.local/flv?port=1935&user=viewer&password=***\\\": EOF\""
+  },
+  {
+    "name": "go2rtc ws error (json)",
+    "input": "{\"type\":\"error\",\"value\":\"mse: streams: Get \\\"http://127.0.0.1:1/flv?port=1935\\u0026user=viewer\\u0026password=FAKEpw123\\\": dial tcp\"}",
+    "expected": "{\"type\":\"error\",\"value\":\"mse: streams: Get \\\"http://127.0.0.1:1/flv?port=1935\\u0026user=viewer\\u0026password=***\\\": dial tcp\"}"
+  },
+  {
+    "name": "lowercase percent hex",
+    "input": "src=rtsp%3a%2f%2fadmin%3asecret99%40cam%2fpath",
+    "expected": "src=rtsp%3a%2f%2f***%40cam%2fpath"
+  },
+  {
+    "name": "no credentials",
+    "input": "dial tcp 192.0.2.10:554: connect: connection refused",
+    "expected": "dial tcp 192.0.2.10:554: connect: connection refused"
+  },
+  {
+    "name": "url without userinfo",
+    "input": "http://go2rtc:1984/api/streams?name=nvr_0_main",
+    "expected": "http://go2rtc:1984/api/streams?name=nvr_0_main"
+  },
+  {
+    "name": "email is not userinfo",
+    "input": "contact admin@example.com for help",
+    "expected": "contact admin@example.com for help"
+  }
+]

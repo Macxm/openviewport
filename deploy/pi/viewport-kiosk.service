@@ -1,0 +1,29 @@
+# The TV: one full-screen browser on tty1, showing the wall and nothing else.
+# Installed by deploy/pi/install.sh, which fills in the user and paths.
+#
+# PAMName=login with TTYPath gives this service a real logind session, which is what lets it
+# open the display and the input devices as an ordinary user rather than as root.
+[Unit]
+Description=OpenViewport kiosk (the wall on the TV)
+Documentation=file://@@DIR@@/docs/raspberry-pi.md
+After=viewport.service systemd-user-sessions.service
+Wants=viewport.service
+ConditionPathExists=/dev/tty1
+
+[Service]
+User=@@USER@@
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+Environment=VIEWPORT_DIR=@@DIR@@
+ExecStart=@@DIR@@/deploy/pi/kiosk.sh
+# The browser is the only thing on this screen, so if it dies, put it back.
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

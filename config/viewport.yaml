@@ -1,0 +1,91 @@
+# OpenViewport agent configuration.
+# ${VAR} and ${VAR:-default} are filled from the environment (.env in Docker).
+
+device:
+  name: ${VIEWPORT_NAME:-Dev Viewport}
+  # Full-resolution streams this device may play at once (decode budget).
+  # Keep 1 on a Raspberry Pi 5; an x86 mini PC can take more.
+  max_main_streams: ${VIEWPORT_MAX_MAIN_STREAMS:-1}
+  max_total_streams: 16
+  # A tile gets the main stream when it covers at least this share of the screen
+  # (full screen = 1.0, big tile in "1+5" = 0.44, 2x2 tile = 0.25).
+  main_stream_min_fraction: 0.4
+  # true: no tile takes the main stream until a camera detects something, and then only
+  # that camera does (subject to detection.use_main_stream). Costs the NVR nothing while
+  # nothing is happening, and the full-resolution stream appears when there is something
+  # to look at. false: the big tile is full resolution all the time.
+  main_stream_only_on_detection: false
+  keep_grid_warm: true
+  # Seconds to keep a main stream after leaving full screen, so quickly going back
+  # doesn't make the NVR reopen a "Clear" session. 0 releases immediately.
+  main_stream_hold_seconds: ${VIEWPORT_MAIN_HOLD_SECONDS:-30}
+  cycle_views_seconds: 0
+
+detection:
+  # Make a camera primary when it sees something. Off by default: it polls the NVR
+  # (one batched request per interval). Everything here is also editable at /admin.
+  enabled: ${VIEWPORT_DETECTION:-false}
+  poll_seconds: 2
+  # What counts, most important first: person, vehicle, animal, face, motion.
+  triggers: [person, vehicle]
+  # fullscreen | promote (into the big tile of promote_layout) | highlight (mark the tile only)
+  action: fullscreen
+  promote_layout: "1+5"
+  hold_seconds: 15              # stay this long after the last detection
+  min_focus_seconds: 5          # before another camera may take the screen
+  manual_override_seconds: 60   # leave the wall alone this long after someone uses it
+  cameras: all
+
+auth:
+  # Shared token for /api/*. Blank = no authentication (development only).
+  # Renderers send it as `Authorization: Bearer <token>` or `?token=`; the wall page
+  # reads it from its own URL, so the kiosk opens http://host:8080/?token=...
+  # It lets a screen WATCH the wall.
+  token: ${VIEWPORT_API_TOKEN:-}
+  # Changing the configuration needs this instead, because the token above is in the
+  # kiosk URL. Blank = the token alone is enough (development only).
+  admin_username: ${VIEWPORT_ADMIN_USERNAME:-admin}
+  admin_password: ${VIEWPORT_ADMIN_PASSWORD:-}
+  # Or, to keep the password out of the environment entirely:
+  #   python -m viewport.auth   (prints a hash to paste here)
+  admin_password_hash: ${VIEWPORT_ADMIN_PASSWORD_HASH:-}
+  session_hours: 12
+  # Names this device is reached by beyond IP addresses, localhost, single-label names and
+  # .local/.lan/.home.arpa/.internal, e.g. a reverse proxy's: comma-separated,
+  # "*.example.com" for subdomains. Anything else is refused, which stops DNS rebinding.
+  allowed_hosts: ${VIEWPORT_ALLOWED_HOSTS:-}
+
+go2rtc:
+  api_url: ${GO2RTC_API_URL:-http://go2rtc:1984}
+  # Blank: the browser uses the same host as the wall, port 1984.
+  public_url: ${GO2RTC_PUBLIC_URL:-}
+  # proxy: video through the agent, so go2rtc stays off the network (see docs/security.md).
+  # direct: the browser connects to go2rtc itself; only for a kiosk on the same device.
+  player_transport: ${PLAYER_TRANSPORT:-proxy}
+  player_mode: ${PLAYER_MODE:-mse}
+  mjpeg_fallback: ${MJPEG_FALLBACK:-false}
+
+sources:
+  - id: nvr
+    # reolink (best for Reolink: real camera names and the configured codec),
+    # onvif (most other brands), or rtsp (URLs you supply; see cameras_urls).
+    type: ${NVR_TYPE:-reolink}
+    host: ${NVR_HOST:-mock-nvr}
+    port: ${NVR_HTTP_PORT:-}
+    https: ${NVR_HTTPS:-false}
+    username: ${NVR_USERNAME:-admin}
+    password: ${NVR_PASSWORD:-mockpass}
+    # auto | rtsp | flv
+    protocol: ${NVR_PROTOCOL:-auto}
+    # Retry a repeatedly failing stream over the other transport (RTSP <-> FLV).
+    protocol_fallback: ${NVR_PROTOCOL_FALLBACK:-true}
+    rtsp_port: ${NVR_RTSP_PORT:-554}
+    refresh_seconds: 60
+
+views:
+  - name: All cameras
+    layout: auto
+    cameras: all
+  - name: Featured
+    layout: "1+5"
+    cameras: all

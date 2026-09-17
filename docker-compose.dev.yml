@@ -1,0 +1,17 @@
+# Conveniences for working on the code, layered over docker-compose.yml. Turn them on with
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
+# in .env (as .env.example does), and leave them off on a real installation.
+services:
+  agent:
+    volumes:
+      # Edit the wall and the admin page, then reload the browser: no rebuild.
+      - ./agent/viewport/web:/app/viewport/web:ro
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+# go2rtc's own web UI is deliberately not published, not even on loopback. It has no
+# authentication, its API answers with every stream's source URL, camera passwords included,
+# and a web page can reach a loopback port through DNS rebinding. To look at it anyway, for a
+# moment and on a machine where you are not browsing the web:
+#   docker compose exec go2rtc python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:1984/api/streams').read().decode())"
+# or publish it yourself with an override of your own, and remove it again afterwards.

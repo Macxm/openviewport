@@ -1,0 +1,14 @@
+# The regression suite's "first run": no sources, no token, no admin password and nothing
+# saved, so the admin page starts the setup guide. The test adds the mock NVR through it.
+device:
+  name: Fresh wall
+
+go2rtc:
+  api_url: ${GO2RTC_API_URL:-http://127.0.0.1:1984}
+
+sources: []
+
+views:
+  - name: All cameras
+    layout: auto-feature
+    cameras: all

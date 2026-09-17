@@ -1,0 +1,33 @@
+# Hardened go2rtc config for an appliance (Raspberry Pi) rather than a dev laptop.
+#
+# Use it when the agent, go2rtc and the browser all run on the same device:
+#
+#   go2rtc -config config/go2rtc.prod.yaml
+#   GO2RTC_API_URL=http://127.0.0.1:1984 python -m viewport
+#
+# It is NOT a drop-in for docker-compose.yml, where the agent is a separate container
+# and could not reach a loopback-only API. To harden the compose stack instead, drop
+# the published 1984/18554 ports so only the compose network can reach go2rtc.
+log:
+  level: warn
+
+api:
+  # Loopback only: nothing on the LAN can enumerate streams or read producer URLs.
+  listen: "127.0.0.1:1984"
+  # Only needed with `player_transport: direct` (the page on :8080, go2rtc on :1984, so the
+  # player is cross-origin even on one device). With the default `proxy`, the browser never
+  # talks to go2rtc and this line can go.
+  origin: "http://localhost:8080"
+
+rtsp:
+  # Local RTSP re-stream for the native renderer. Loopback: it carries camera video.
+  listen: "127.0.0.1:8554"
+
+webrtc:
+  listen: ""
+
+srtp:
+  listen: ""
+
+# Camera streams are added at runtime by the agent, never written here.
+streams: {}

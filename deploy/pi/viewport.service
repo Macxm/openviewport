@@ -1,0 +1,23 @@
+# The camera wall itself: the Docker stack, started at boot.
+# Installed by deploy/pi/install.sh, which fills in the paths.
+[Unit]
+Description=OpenViewport camera wall
+Documentation=file://@@DIR@@/docs/raspberry-pi.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=@@DIR@@
+# The containers restart themselves (restart: unless-stopped); this is what starts them at
+# boot, and what `systemctl restart viewport` uses. --remove-orphans clears containers left
+# behind by a profile that is no longer switched on, such as the mock NVR.
+ExecStart=@@DOCKER@@ compose up -d --remove-orphans
+ExecStop=@@DOCKER@@ compose stop
+# A first start on a fresh install builds the agent image, which takes a few minutes on a Pi.
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
