@@ -4,8 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Dependencies only, pinned by hash, in their own layer: the image is reproducible and
-# editing the agent does not reinstall anything. Refresh the lock with:
-#   docker run --rm -v "$PWD/agent:/src" -w /src python:3.12-slim sh -c \
+# editing the agent does not reinstall anything. Refresh the lock from the repository root,
+# on the same image as the FROM line above so the pins are resolved on the Python that runs
+# them:
+#   docker run --rm -v "$PWD/agent:/src" -w /src "$(sed -n 's/^FROM //p' agent/Dockerfile)" sh -c \
 #     "pip install -q pip-tools && pip-compile --generate-hashes -o requirements.lock.txt pyproject.toml"
 COPY requirements.lock.txt ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock.txt
