@@ -1,20 +1,43 @@
 name: ci
 
 on:
+  # Pull requests are tested by the pull_request event; pushing their branch as well would
+  # run everything twice. Direct pushes are tested only where they land: main.
   push:
+    branches: [main]
   pull_request:
 
+# Least privilege. The jobs only read the repository: nothing here writes to it, comments on a
+# pull request or needs a secret, so a compromised step has nothing to escalate with.
 permissions:
   contents: read
 
+# A newer push to the same pull request cancels the run it has made pointless. Runs on main
+# always finish, so every commit there has a result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
+    # Named as the check that branch protection requires, so renaming it is deliberate.
+    name: test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      # Every action is pinned to a full commit SHA: the only immutable reference, since a tag
+      # can be moved to different code after the fact. Dependabot updates SHA and comment together.
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # Otherwise the token stays in .git/config for every later step to read.
+          persist-credentials: false
 
       # The same commands a developer runs locally: everything is containerised, so CI needs
       # no Python, Node or browser of its own.
+      - name: Audit the workflows (zizmor)
+        run: docker compose --profile test run --rm zizmor
+
       - name: Unit and API tests
         run: docker compose --profile test run --rm unit
 
@@ -30,8 +53,9 @@ jobs:
 
       - name: Screenshots of failures
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: e2e-failures
           path: e2e-output/
           if-no-files-found: ignore
+          retention-days: 7

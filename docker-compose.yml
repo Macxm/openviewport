@@ -161,7 +161,8 @@ services:
         import pathlib, yaml
         for f in ["docker-compose.yml", "docker-compose.dev.yml", "config/go2rtc.yaml",
                   "config/go2rtc.prod.yaml", "config/viewport.yaml", "tests/e2e/fresh.yaml",
-                  ".github/workflows/ci.yml", ".github/dependabot.yml"]:
+                  ".github/workflows/ci.yml", ".github/workflows/dependency-review.yml",
+                  ".github/dependabot.yml"]:
             yaml.safe_load(pathlib.Path(f).read_text())
             print(f"YAML OK: {f}")
         PY
@@ -175,6 +176,16 @@ services:
         set -e
         pip-audit --strict --disable-pip --requirement agent/requirements.lock.txt
         echo "no known vulnerabilities in the pinned runtime dependencies"
+
+  # The GitHub Actions workflows, audited: actions not pinned to a commit, a token with more
+  # permission than it needs, credentials left in .git/config, template injection. Offline,
+  # so it needs no token. Any finding fails, which is what keeps the workflows hardened.
+  zizmor:
+    profiles: ["test"]
+    image: ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
+    volumes:
+      - ./.github:/repo/.github:ro
+    command: ["--offline", "/repo/.github/workflows/"]
 
   # A quick check of the wall that is running now, whatever it is pointed at: it plays, full
   # screen switches to HD, the admin page loads. It briefly changes what the shared wall shows.

@@ -25,6 +25,7 @@ No Python, Node or browser is needed on your machine, and CI runs the same comma
 docker compose --profile test run --rm unit     # unit and API tests (about 12 s)
 docker compose --profile test run --rm lint     # JS syntax and tests, YAML, redaction parity
 docker compose --profile test run --rm audit    # pinned dependencies vs advisories (needs network)
+docker compose --profile test run --rm zizmor   # the GitHub Actions workflows, audited
 sh scripts/e2e.sh                               # the browser regression suite (about 2 min)
 ```
 
@@ -68,6 +69,17 @@ points at (your real NVR included): it plays, full screen switches to HD, the re
 video, the admin page loads and fits a phone. It briefly changes what the shared wall shows, and
 writes nothing. `python scripts/e2e_check.py --channel chrome` runs the same check with a Chrome
 installed on the host.
+
+### Continuous integration
+
+Every pull request runs the checks above, plus GitHub's dependency review, which refuses a
+change that adds a dependency with a known vulnerability. The workflows are kept hardened, and
+`zizmor` fails the build if an edit undoes any of it:
+
+- every action is pinned to a full commit SHA, with its version in a comment; Dependabot moves
+  both together. A tag can be re-pointed at different code, a commit cannot;
+- the token can only read the repository, and checkout does not leave it in `.git/config`;
+- jobs have time limits, and a newer push to a pull request cancels the older run.
 
 ## Developing
 
