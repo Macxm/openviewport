@@ -161,7 +161,7 @@ services:
         import pathlib, yaml
         for f in ["docker-compose.yml", "docker-compose.dev.yml", "config/go2rtc.yaml",
                   "config/go2rtc.prod.yaml", "config/viewport.yaml", "tests/e2e/fresh.yaml",
-                  ".github/workflows/ci.yml"]:
+                  ".github/workflows/ci.yml", ".github/dependabot.yml"]:
             yaml.safe_load(pathlib.Path(f).read_text())
             print(f"YAML OK: {f}")
         PY

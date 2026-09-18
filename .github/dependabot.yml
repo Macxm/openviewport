@@ -8,6 +8,10 @@ updates:
     groups:
       python:
         patterns: ["*"]
+    ignore:
+      # pydantic pins its core to one exact version, so pydantic-core only ever moves with
+      # pydantic, which brings the matching one along. Proposed on its own it cannot install.
+      - dependency-name: "pydantic-core"
 
   # go2rtc and the Python base images, in the Dockerfiles and in docker-compose.yml.
   - package-ecosystem: "docker"
