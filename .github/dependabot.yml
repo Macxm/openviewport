@@ -13,13 +13,25 @@ updates:
       # pydantic, which brings the matching one along. Proposed on its own it cannot install.
       - dependency-name: "pydantic-core"
 
-  # go2rtc and the Python base images, in the Dockerfiles and in docker-compose.yml.
+  # The base images in the Dockerfiles.
   - package-ecosystem: "docker"
     directories: ["/agent", "/mock-nvr", "/tests", "/"]
     schedule:
       interval: "weekly"
 
+  # The images named in docker-compose.yml, which the "docker" ecosystem does not read:
+  # go2rtc, which holds the camera passwords, and the pinned zizmor.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # The actions are pinned by commit SHA; Dependabot moves the SHA and its version comment
+  # together, all in one pull request.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+    groups:
+      actions:
+        patterns: ["*"]
