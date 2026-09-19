@@ -1,0 +1,44 @@
+# The one part that runs as root: joining wifi networks, restarting, powering down.
+# Installed by deploy/pi/install.sh, which fills in the paths. See deploy/pi/hostd.py for what
+# it will and will not do, and docs/raspberry-pi.md for how it fits together.
+[Unit]
+Description=OpenViewport host helper (network and power)
+Documentation=file://@@DIR@@/docs/raspberry-pi.md
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 @@DIR@@/deploy/pi/hostd.py
+Restart=always
+RestartSec=2
+
+# /run/openviewport holds the socket the agent's container connects to. The directory is
+# traversable by anyone; the socket inside it is root:10001 and mode 0660, which is what
+# actually decides who may talk to this service.
+RuntimeDirectory=openviewport
+RuntimeDirectoryMode=0755
+# Where the access point's name and password are kept, so joining it works twice.
+StateDirectory=openviewport
+StateDirectoryMode=0700
+
+# It has to be root to change the network and to power the device off. Everything else is
+# taken away: this is a service whose whole job is eight operations.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+# NetworkManager and systemd are both reached over D-Bus, which is a Unix socket; netlink is
+# what the tools underneath use. Nothing here opens a network connection.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target
