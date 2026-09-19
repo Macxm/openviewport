@@ -70,7 +70,8 @@ quality of its own — always HD, always SD, or automatic — and how its pictur
 Underneath, what the NVR actually reports: resolution, codec, bitrate and keyframe interval,
 with advice when a slow keyframe interval is what makes switching to HD feel sluggish.
 
-The other sections are **Sources** (add or remove an NVR while it runs), **Views**, **Layouts**
+The other sections are **General** (what this device is, how it reaches the network, and how to
+restart or reset it), **Sources** (add or remove an NVR while it runs), **Views**, **Layouts**
 (a drag-to-merge grid editor), **Display**, **Detection**, **This device** (the stream budget)
 and **Security**.
 

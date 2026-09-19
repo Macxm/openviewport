@@ -84,6 +84,14 @@ class SecretStore:
         data[ADMIN_KEY] = {"username": username, "password_hash": password_hash}
         self._write(data)
 
+    def clear(self) -> None:
+        """Forget everything: the admin password and every source's credentials.
+
+        Only for handing the device on, where leaving the last owner's NVR password behind
+        would be the worst outcome. The file stays, empty, so its 0600 mode is kept.
+        """
+        self._write({})
+
     def _write(self, data: dict[str, Any]) -> None:
         if self.path is None:
             raise RuntimeError("no secrets file configured (set VIEWPORT_SECRETS_FILE)")

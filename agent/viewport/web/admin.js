@@ -23,6 +23,7 @@ const params = new URLSearchParams(location.search);
 const TOKEN = params.get('token') || '';
 
 const SECTIONS = [
+  { id: 'general', title: 'General', hint: 'This device and its network' },
   { id: 'sources', title: 'Sources', hint: 'Where cameras come from' },
   { id: 'cameras', title: 'Cameras', hint: 'Names, quality and order' },
   { id: 'views', title: 'Views', hint: 'What the wall shows' },
@@ -198,6 +199,7 @@ async function lock() {
 /** Read the session and the settings again: after unlocking, locking, or a new password. */
 async function refresh({ discardDrafts = false } = {}) {
   session = await api('/api/admin/session');
+  await refreshDevice();
   let next;
   try {
     next = await api('/api/config');
@@ -1321,6 +1323,315 @@ function renderDevice() {
   );
 }
 
+// ---------------------------------------------------------------- general
+
+let device = null;              // what the device says about itself
+let networks = null;            // the last scan, while the join dialog is open
+
+async function refreshDevice() {
+  try {
+    device = await api('/api/device');
+  } catch (err) {
+    device = null;              // locked out or offline: the panel says so rather than lying
+  }
+}
+
+function duration(seconds) {
+  if (!Number.isFinite(seconds)) return '—';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days) return `${days} d ${hours} h`;
+  if (hours) return `${hours} h ${minutes} min`;
+  return `${minutes} min`;
+}
+
+function gigabytes(bytes) {
+  return Number.isFinite(bytes) ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : '—';
+}
+
+/** How the device is on the network, in the words someone would use for it. */
+function linkLabel(host) {
+  if (host.access_point) return 'Its own setup network';
+  if (host.link === 'wifi') return host.ssid ? `Wi-Fi · ${host.ssid}` : 'Wi-Fi';
+  if (host.link === 'ethernet') return 'Ethernet';
+  if (host.link === 'none' || !host.link) return 'Not connected';
+  return host.link;
+}
+
+function fact(label, value, help) {
+  return setting({ label, help, control: el('span', 'fact', value ?? '—'), fit: true });
+}
+
+function renderGeneral() {
+  const box = $('general');
+  box.replaceChildren();
+  if (!device) {
+    box.append(notice('This device cannot be read from here.', 'warn'));
+    return;
+  }
+  const host = device.host || { kind: 'none' };
+  const rows = [
+    fact('Name', device.name, 'Change it under This device.'),
+    fact('Version', device.version),
+    fact('Cameras', `${device.cameras} from ${device.sources.length} source${device.sources.length === 1 ? '' : 's'}`),
+  ];
+  if (Number.isFinite(host.uptime_seconds)) rows.push(fact('Running for', duration(host.uptime_seconds)));
+  if (Number.isFinite(host.temperature_c)) {
+    rows.push(fact('Temperature', `${host.temperature_c.toFixed(1)} °C`,
+                   host.temperature_c >= 80 ? 'Hot: check that nothing is covering it.' : undefined));
+  }
+  if (Number.isFinite(host.disk_free_bytes)) {
+    rows.push(fact('Disk free', `${gigabytes(host.disk_free_bytes)} of ${gigabytes(host.disk_total_bytes)}`));
+  }
+
+  const net = [fact('Connection', linkLabel(host))];
+  if (host.addresses && host.addresses.length) net.push(fact('Address', host.addresses.join(', ')));
+  if (host.hostname) net.push(fact('Name on the network', `${host.hostname}.local`));
+
+  box.append(group('This device', rows));
+
+  if (host.kind === 'none') {
+    box.append(group('Network', net, { note: 'Connecting this device to a different network, '
+      + 'restarting it and resetting it are done by a helper that runs on the device itself. '
+      + 'This installation has none, so only the settings above can be changed here.' }));
+    box.append(resetGroup());
+    return;
+  }
+  if (host.kind === 'fake' || host.simulated) {
+    box.append(notice('These controls are simulated on this machine: nothing here reaches real '
+                      + 'hardware. On the device itself they do.', 'warn'));
+  }
+  if (host.error) box.append(notice(`The device helper answered: ${host.error}`, 'warn'));
+
+  net.push(setting({
+    label: 'Wi-Fi', help: host.access_point
+      ? 'This device is showing its own setup network. Joining yours turns that off.'
+      : 'Join a different network, or forget the one it is on.',
+    control: buttons([
+      ['Choose a network', openJoin],
+      ...(host.ssid ? [['Forget ' + host.ssid, () => forgetNetwork(host.ssid), 'danger']] : []),
+    ]),
+  }));
+  net.push(setting({
+    label: 'Prefer', help: 'Which connection to use when both are available.',
+    control: buttons([['Ethernet', () => prefer('ethernet')], ['Wi-Fi', () => prefer('wifi')]]),
+  }));
+  net.push(setting({
+    label: 'Setup network', help: 'Show this device\'s own network, to set it up from a phone.',
+    control: buttons([[host.access_point ? 'Turn it off' : 'Turn it on',
+                       () => accessPoint(!host.access_point)]]), fit: true,
+  }));
+  box.append(group('Network', net));
+
+  box.append(group('Power', [
+    setting({ label: 'Restart', help: 'The wall is back in a minute or so.',
+              control: buttons([['Restart', () => confirmAction({
+                title: 'Restart this device?',
+                body: 'The wall goes dark for about a minute.',
+                confirm: 'Restart', path: '/api/device/reboot',
+              })]]), fit: true }),
+    setting({ label: 'Shut down',
+              help: 'It stays off until someone switches the power off and on again.',
+              control: buttons([['Shut down', () => confirmAction({
+                title: 'Shut this device down?',
+                body: 'Nothing here can switch it back on: somebody has to unplug it and plug it in again.',
+                confirm: 'Shut down', path: '/api/device/shutdown', danger: true,
+              })]]), fit: true }),
+  ]));
+  box.append(resetGroup());
+}
+
+function resetGroup() {
+  return group('Start again', [
+    setting({ label: 'Reset the settings',
+              help: 'Cameras, views and layouts go back to how they were installed. The admin '
+                + 'password and the NVR\'s login stay.',
+              control: buttons([['Reset the settings', () => confirmAction({
+                title: 'Reset the settings?',
+                body: 'Views, layouts, camera names and detection go back to the beginning, and the '
+                  + 'setup guide starts again. Your password and your NVR login are kept.',
+                confirm: 'Reset the settings', path: '/api/device/reset',
+                body_json: { scope: 'configuration' }, restarts: true,
+              })]]), fit: true }),
+    setting({ label: 'Reset the device',
+              help: 'Everything, including the admin password and every saved credential. For '
+                + 'handing this device to someone else.',
+              control: buttons([['Reset the device', () => confirmAction({
+                title: 'Reset the whole device?',
+                body: 'Everything this device knows is forgotten: the settings, the admin password, '
+                  + 'the NVR\'s username and password, and the wi-fi network. It comes back as if '
+                  + 'newly installed, and whoever opens it next chooses the password.',
+                confirm: 'Reset everything', path: '/api/device/reset', danger: true,
+                body_json: { scope: 'device', forget_network: true }, restarts: true,
+                typeToConfirm: 'reset',
+              })]]), fit: true }),
+  ]);
+}
+
+/** A row of buttons, which the locked fieldset disables along with everything else. */
+function buttons(items) {
+  const row = el('div', 'button-row');
+  for (const [label, onClick, kind] of items) {
+    const button = el('button', kind === 'danger' ? 'danger' : null, label);
+    button.type = 'button';
+    button.addEventListener('click', onClick);
+    row.append(button);
+  }
+  return row;
+}
+
+async function deviceAction(path, body, { restarts = false } = {}) {
+  try {
+    await api(path, { method: 'POST', body: body || {} });
+  } catch (err) {
+    toast(err.message, 'warn');
+    return false;
+  }
+  if (restarts) {
+    toast('Done. This device is restarting: the page will come back by itself.', 'ok');
+  } else {
+    toast('Done.', 'ok');
+  }
+  await refreshDevice();
+  renderGeneral();
+  return true;
+}
+
+const prefer = (link) => deviceAction('/api/device/network/prefer', { link });
+const accessPoint = (on) => deviceAction('/api/device/access-point', { on });
+
+function forgetNetwork(ssid) {
+  confirmAction({
+    title: `Forget ${ssid}?`,
+    body: 'This device stops using that network. If it has no cable, it will show its own setup '
+      + 'network instead, and you will have to join that to set it up again.',
+    confirm: 'Forget it', danger: true, path: '/api/device/network/forget', body_json: { ssid },
+  });
+}
+
+/** Ask first, and for the worst of them ask for a word to be typed. */
+function confirmAction({ title, body, confirm, path, body_json, danger = false, restarts = false,
+                         typeToConfirm = null }) {
+  const dialog = el('dialog', 'confirm');
+  const form = el('form');
+  form.method = 'dialog';
+  const typed = typeToConfirm ? textOf('', { placeholder: typeToConfirm }) : null;
+  const go = el('button', danger ? 'danger' : 'primary', confirm);
+  go.type = 'submit';
+  const cancel = el('button', null, 'Cancel');
+  cancel.type = 'button';
+  cancel.addEventListener('click', () => dialog.close());
+  const foot = el('div', 'card-foot');
+  foot.append(cancel, go);
+  form.append(el('h3', null, title), el('p', null, body));
+  if (typed) {
+    form.append(setting({ label: `Type “${typeToConfirm}” to confirm`, control: typed }));
+    go.disabled = true;
+    typed.addEventListener('input', () => { go.disabled = typed.value.trim() !== typeToConfirm; });
+  }
+  form.append(foot);
+  dialog.append(form);
+  document.body.append(dialog);
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    dialog.close();
+    await deviceAction(path, body_json, { restarts });
+  });
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.showModal();
+}
+
+/** Pick a network and join it. */
+async function openJoin() {
+  const dialog = el('dialog', 'join');
+  const list = el('div', 'network-list', 'Looking for networks…');
+  const form = el('form');
+  form.method = 'dialog';
+  const close = el('button', null, 'Cancel');
+  close.type = 'button';
+  close.addEventListener('click', () => dialog.close());
+  const foot = el('div', 'card-foot');
+  foot.append(close);
+  form.append(el('h3', null, 'Choose a network'), list, foot);
+  dialog.append(form);
+  document.body.append(dialog);
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.showModal();
+
+  try {
+    networks = (await api('/api/device/networks')).networks || [];
+  } catch (err) {
+    list.replaceChildren(notice(err.message, 'warn'));
+    return;
+  }
+  if (!networks.length) {
+    list.replaceChildren(notice('No networks in range.', 'warn'));
+    return;
+  }
+  list.replaceChildren(...networks.map((n) => {
+    const row = el('button', 'network', '');
+    row.type = 'button';
+    row.append(el('span', 'network-name', n.ssid),
+               el('span', 'network-detail', `${n.security || 'open'} · ${n.signal}%${n.active ? ' · in use' : ''}`));
+    row.addEventListener('click', () => { dialog.close(); askPassword(n); });
+    return row;
+  }));
+}
+
+function askPassword(network) {
+  if (!network.security) {
+    joinNetwork(network.ssid, '');
+    return;
+  }
+  const dialog = el('dialog', 'join');
+  const form = el('form');
+  form.method = 'dialog';
+  form.noValidate = true;
+  const password = textOf('', { type: 'password', autocomplete: 'off' });
+  const error = el('p', 'form-error');
+  error.hidden = true;
+  const go = el('button', 'primary', 'Join');
+  go.type = 'submit';
+  const cancel = el('button', null, 'Cancel');
+  cancel.type = 'button';
+  cancel.addEventListener('click', () => dialog.close());
+  const foot = el('div', 'card-foot');
+  foot.append(error, cancel, go);
+  form.append(el('h3', null, `Join ${network.ssid}`),
+              el('p', null, 'This device will use this network from now on. If you are connected '
+                          + 'to its setup network, rejoin your own network afterwards.'),
+              setting({ label: 'Password', control: password }), foot);
+  dialog.append(form);
+  document.body.append(dialog);
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.showModal();
+  password.focus();
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    go.disabled = true;
+    try {
+      await api('/api/device/network/join', { method: 'POST', body: { ssid: network.ssid, password: password.value } });
+    } catch (err) {
+      error.textContent = err.message;
+      error.hidden = false;
+      go.disabled = false;
+      return;
+    }
+    dialog.close();
+    toast(`Joined ${network.ssid}.`, 'ok');
+    await refreshDevice();
+    renderGeneral();
+  });
+}
+
+async function joinNetwork(ssid, password) {
+  if (await deviceAction('/api/device/network/join', { ssid, password })) {
+    toast(`Joined ${ssid}.`, 'ok');
+  }
+}
+
 // ---------------------------------------------------------------- security
 
 function renderSecurity() {
@@ -1429,6 +1740,7 @@ function passwordForm(first) {
 }
 
 const RENDER = {
+  general: renderGeneral,
   sources: renderSources,
   cameras: renderCameras,
   views: renderViews,
@@ -1481,6 +1793,9 @@ function showSection(id, { smooth = true } = {}) {
   current = next;
   if (location.hash.slice(1) !== current) history.replaceState(null, '', `#${current}`);
   applyPanels();
+  // Temperature, addresses and which network it is on all move: read them again on arrival
+  // rather than showing whatever was true when the page was opened.
+  if (current === 'general') refreshDevice().then(renderGeneral);
   window.scrollTo(0, 0);
   // On a phone the tabs are one row to swipe along: bring the chosen one into view.
   const tabs = $('tabs');
@@ -1669,6 +1984,7 @@ async function start() {
     banner(`Could not load the settings: ${err.message}`);
     return;
   }
+  await refreshDevice();
   shown = true;
   $('shell').hidden = false;
   load(next, { render: false });

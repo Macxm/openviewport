@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import secrets
+import signal
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +27,7 @@ from .config import (AppConfig, CameraSettings, DetectionConfig, DeviceConfig, D
                      LayoutConfig, RtspCamera, SourceConfig, ViewConfig, register_config_secrets)
 from .auth import COOKIE, MIN_PASSWORD_LENGTH, admin_from_config, hash_password
 from .credentials import safe_error
+from .hostctl import HostControl, HostError
 from .layouts import AUTO_NAMES, SAME_LAYOUT
 from .runtime import Runtime
 from .security import SecurityMiddleware
@@ -132,6 +135,45 @@ class NewSourceRequest(BaseModel):
     cameras_urls: list[RtspCamera] = Field(default_factory=list)
 
 
+class JoinRequest(BaseModel):
+    """Joining a wifi network. The password is never read back, like every other secret."""
+    model_config = ConfigDict(extra="forbid")
+
+    ssid: str
+    password: str = ""
+
+
+class NetworkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ssid: str
+
+
+class PreferRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    link: Literal["ethernet", "wifi"]
+
+
+class AccessPointRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    on: bool
+
+
+class ResetRequest(BaseModel):
+    """How far back to go.
+
+    configuration: the settings made in this page, so the setup guide starts again. The admin
+    password and the NVR's credentials stay, so whoever owns the device keeps it.
+    device: those as well — everything this device knows, for handing it to someone else.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    scope: Literal["configuration", "device"] = "configuration"
+    forget_network: bool = False
+
+
 class PasswordRequest(BaseModel):
     """Choosing the admin password in the page, or changing it."""
     model_config = ConfigDict(extra="forbid")
@@ -152,8 +194,10 @@ def _direct_player_sources(config: AppConfig) -> list[str]:
     return ["ws://{host}:1984", "wss://{host}:1984"]
 
 
-def create_app(config: AppConfig, runtime: Runtime | None = None, *, start_background: bool = True) -> FastAPI:
+def create_app(config: AppConfig, runtime: Runtime | None = None, *, start_background: bool = True,
+               host: HostControl | None = None) -> FastAPI:
     rt = runtime or Runtime(config)
+    device = host if host is not None else HostControl()
     admin = admin_from_config(config.auth, rt.secrets)
 
     @asynccontextmanager
@@ -438,6 +482,111 @@ def create_app(config: AppConfig, runtime: Runtime | None = None, *, start_backg
         except (ValueError, OSError) as exc:
             raise HTTPException(400, safe_error(exc)) from None
         return config_payload()
+
+    # ----- the device itself -------------------------------------------------------
+    # Reading is allowed wherever the settings may be read, so the panel is useful while the
+    # page is locked. Everything that *changes* the device needs the admin password, and goes
+    # no further than hostctl's fixed vocabulary.
+
+    @api.get("/device")
+    async def device_status() -> dict[str, Any]:
+        health = rt.health()
+        return {
+            "name": config.device.name,
+            "version": __version__,
+            "configured": rt.store.configured(),
+            "host": await device.status(),
+            "sources": [{"id": s["id"], "reachable": s["reachable"], "cameras": s["cameras"]}
+                        for s in health.get("sources", [])],
+            "cameras": len(rt.wall.cameras),
+        }
+
+    @admin_api.get("/device/networks")
+    async def device_networks() -> dict[str, Any]:
+        """Scanning is an action, not a reading: it takes the radio and shows the neighbours."""
+        try:
+            return {"networks": await device.networks()}
+        except HostError as exc:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+
+    @admin_api.post("/device/network/join")
+    async def device_join(req: JoinRequest) -> dict[str, Any]:
+        try:
+            return {"host": {**await device.join(req.ssid, req.password)}}
+        except HostError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+
+    @admin_api.post("/device/network/forget")
+    async def device_forget(req: NetworkRequest) -> dict[str, Any]:
+        try:
+            await device.forget(req.ssid)
+        except HostError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+        return {"host": await device.status()}
+
+    @admin_api.post("/device/network/prefer")
+    async def device_prefer(req: PreferRequest) -> dict[str, Any]:
+        try:
+            await device.prefer(req.link)
+        except HostError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+        return {"host": await device.status()}
+
+    @admin_api.post("/device/access-point")
+    async def device_access_point(req: AccessPointRequest) -> dict[str, Any]:
+        try:
+            await device.access_point(req.on)
+        except HostError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+        return {"host": await device.status()}
+
+    @admin_api.post("/device/reboot")
+    async def device_reboot() -> dict[str, Any]:
+        try:
+            result = await device.reboot()
+        except HostError as exc:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+        log.warning("reboot asked for from the admin page")
+        return {"accepted": True, **result}
+
+    @admin_api.post("/device/shutdown")
+    async def device_shutdown() -> dict[str, Any]:
+        try:
+            result = await device.shutdown()
+        except HostError as exc:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+        log.warning("shutdown asked for from the admin page")
+        return {"accepted": True, **result}
+
+    @admin_api.post("/device/reset")
+    async def device_reset(req: ResetRequest) -> dict[str, Any]:
+        """Forget what was set up here, and come back as if newly installed.
+
+        The agent restarts itself rather than trying to unpick a running wall: the container
+        is restarted by Docker (restart: unless-stopped), and comes up reading whatever is
+        left. Without that supervision the agent simply stops, which is also honest.
+        """
+        if not rt.store.writable:
+            raise HTTPException(status.HTTP_409_CONFLICT, "there is nowhere to keep settings, "
+                                                          "so there is nothing to reset")
+        forgotten = []
+        rt.store.save({})
+        forgotten.append("settings")
+        if req.scope == "device":
+            if rt.secrets.writable:
+                rt.secrets.clear()
+                forgotten.append("the admin password and every saved credential")
+            if req.forget_network and device.available:
+                try:
+                    status_now = await device.status()
+                    if status_now.get("ssid"):
+                        await device.forget(status_now["ssid"])
+                        forgotten.append("the wifi network")
+                except HostError as exc:
+                    log.warning("could not forget the network: %s", exc)
+        log.warning("reset asked for from the admin page: %s", ", ".join(forgotten))
+        asyncio.get_running_loop().call_later(1.0, lambda: os.kill(os.getpid(), signal.SIGTERM))
+        return {"forgotten": forgotten, "restarting": True}
 
     @admin_api.post("/config/setup-done")
     async def setup_done() -> dict[str, Any]:
