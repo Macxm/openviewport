@@ -550,3 +550,49 @@ body.guide { --savebar-space: 88px; }
   .facts { grid-template-columns: 1fr; gap: 2px; }
   .facts dd { margin-bottom: 8px; }
 }
+
+/* ---- General: what the device says about itself, and what can be done to it ---- */
+
+.fact {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Anything that cannot be undone by pressing it again. */
+button.danger {
+  border-color: #6d2a2a;
+  color: #ffc2c2;
+}
+
+button.danger:hover:not(:disabled) { background: #3a1d1d; }
+
+.network-list {
+  display: grid;
+  gap: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+button.network {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.network-name { font-weight: 600; }
+.network-detail { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+dialog.confirm p, dialog.join p { color: var(--muted); line-height: 1.5; margin: 0; max-width: 46ch; }
+dialog.confirm h3, dialog.join h3 { font-size: 18px; }

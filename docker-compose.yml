@@ -236,6 +236,7 @@ services:
       VIEWPORT_STATE_FILE: /data/state.json
       VIEWPORT_SECRETS_FILE: /data/secrets.json
       VIEWPORT_NAME: E2E wall
+      VIEWPORT_HOST_FAKE: "1"
       GO2RTC_API_URL: http://e2e-go2rtc:1984
       NVR_TYPE: reolink
       NVR_HOST: e2e-nvr
@@ -265,6 +266,7 @@ services:
       VIEWPORT_CONFIG: /config/viewport.yaml
       VIEWPORT_STATE_FILE: /data/state.json
       VIEWPORT_SECRETS_FILE: /data/secrets.json
+      VIEWPORT_HOST_FAKE: "1"
       GO2RTC_API_URL: http://e2e-go2rtc-fresh:1984
     volumes:
       - ./tests/e2e/fresh.yaml:/config/viewport.yaml:ro
