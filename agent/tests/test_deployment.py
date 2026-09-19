@@ -63,6 +63,28 @@ def test_the_agent_listens_where_the_mapping_and_the_healthcheck_look():
     assert SERVICES["agent"]["ports"][0].endswith(":8080")
 
 
+def test_the_agent_can_reach_the_host_helper_without_being_able_to_write_there():
+    """The socket is how privileged work happens at all; it is also the only way in, so the
+    agent gets the directory read-only and creates nothing in it."""
+    mounts = SERVICES["agent"]["volumes"]
+    assert "/run/openviewport:/run/openviewport:ro" in mounts
+
+
+def test_the_host_helper_never_reaches_a_shell():
+    """It runs as root. Every command it issues is an argument list, so a network name full
+    of shell characters stays a network name."""
+    source = (ROOT / "deploy" / "pi" / "hostd.py").read_text()
+    for forbidden in ("shell=True", "os.system", "os.popen", "subprocess.getoutput"):
+        assert forbidden not in source, f"hostd.py uses {forbidden}"
+
+
+def test_the_helper_service_gives_itself_no_more_than_it_needs():
+    unit = (ROOT / "deploy" / "pi" / "openviewport-hostd.service").read_text()
+    for setting in ("NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
+                    "RestrictAddressFamilies=AF_UNIX AF_NETLINK", "SystemCallFilter=@system-service"):
+        assert setting in unit, f"the helper unit is missing {setting}"
+
+
 def test_a_second_copy_of_the_project_can_have_a_stack_of_its_own():
     """`name:` deliberately ignores the directory, so without this a second checkout's `up`
     takes over the first one's containers and shares its settings volume and secrets."""

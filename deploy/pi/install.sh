@@ -125,8 +125,24 @@ say "Building the images (a few minutes the first time)"
 
 say "Installing the services"
 install_unit viewport.service
+
+# The helper is what lets the settings page join a wifi network, restart the device or reset
+# it. Without NetworkManager there is nothing for it to drive, so it is skipped and the
+# General section shows what it can without it.
+if command -v nmcli >/dev/null 2>&1; then
+    install_unit openviewport-hostd.service
+    helper=yes
+else
+    echo "note: NetworkManager (nmcli) is not installed, so the network and power controls" >&2
+    echo "      in the admin page will be unavailable. sudo apt install network-manager" >&2
+    helper=no
+fi
+
 systemctl daemon-reload
 systemctl enable --now viewport.service
+if [ "$helper" = yes ]; then
+    systemctl enable --now openviewport-hostd.service
+fi
 
 if [ "$kiosk" = yes ]; then
     if [ "$(systemctl get-default)" = graphical.target ]; then

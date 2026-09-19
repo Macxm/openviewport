@@ -98,6 +98,11 @@ services:
     volumes:
       - ./config/viewport.yaml:/config/viewport.yaml:ro
       - viewport-state:/data
+      # The host helper's socket, on a device that has one (deploy/pi/hostd.py). Read-only:
+      # opening a Unix socket writes nothing to the filesystem, and the agent has no business
+      # creating anything here. Where there is no helper the directory is simply empty, and
+      # the General section says so rather than offering buttons that do nothing.
+      - /run/openviewport:/run/openviewport:ro
     ports:
       # Loopback unless you say otherwise: a TV elsewhere on the LAN needs
       # VIEWPORT_BIND=0.0.0.0, and then VIEWPORT_API_TOKEN and an admin password too.

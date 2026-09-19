@@ -7,6 +7,7 @@ reachable from your phone. Two containers run on it and nothing else.
 |---|---|
 | `viewport.service` | the stack: the agent and go2rtc. Starts at boot |
 | `viewport-kiosk.service` | one full-screen Chromium on tty1, showing the wall |
+| `openviewport-hostd.service` | the only part that runs as root: wifi, restart, power off |
 | the wall | `http://localhost:8080/?token=…` — what the TV shows |
 | the settings | `http://<the pi>.local:8080/admin` — from your phone or laptop |
 
@@ -93,6 +94,33 @@ sudo deploy/pi/install.sh --bind 127.0.0.1
 
 Then nothing but the Pi itself can reach the wall, and you manage it over SSH. go2rtc is never
 published either way: its API would hand out the camera password.
+
+## Changing the device from the settings page
+
+The **General** section shows what this device is — its name, version, how long it has been
+running, its temperature, disk space, which network it is on and at what address — and can
+change it: join or forget a wifi network, prefer ethernet or wifi, show the device's own setup
+network, restart, shut down, or start again from scratch.
+
+Anyone who may see the settings may read that. Everything that *changes* the device needs the
+admin password.
+
+None of it happens inside the container. The agent runs read-only, without Linux capabilities
+and as nobody in particular, so it asks `openviewport-hostd`, a small service on the device
+itself, over a Unix socket. That service answers eight operations and nothing else — status,
+networks, join, forget, access-point, prefer, reboot, shutdown — checks every argument again on
+arrival, and never passes anything to a shell. There is no operation that runs a command of the
+caller's choosing, so the worst anyone who reaches the socket can do is what someone standing
+at the device could do anyway. systemd takes away everything the service does not need
+(`deploy/pi/openviewport-hostd.service`).
+
+It needs NetworkManager, which Raspberry Pi OS uses by default. Without it the installer skips
+the helper, and the General section shows what it can and says the rest is unavailable.
+
+**Starting again** comes in two sizes. *Reset the settings* returns the cameras, views and
+layouts to a fresh install and starts the setup guide, keeping the admin password and the NVR's
+login. *Reset the device* forgets those too, and the wifi network with them: for handing the
+device to someone else. The agent restarts itself either way, and comes back on what is left.
 
 ## Updating
 

@@ -15,7 +15,10 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.lock.txt
 # Run from source, so agent/viewport/web can be bind-mounted during development.
 COPY pyproject.toml ./
 COPY viewport ./viewport
-RUN useradd --system --uid 10001 viewport \
+# Both pinned: the host helper's socket is owned by this group, so which numbers the
+# base image happens to hand out must not decide whether the agent can open it.
+RUN groupadd --system --gid 10001 viewport \
+ && useradd --system --uid 10001 --gid 10001 viewport \
  # COPY keeps the build context's file modes. A restrictive umask on the
  # developer's machine would otherwise leave /app unreadable to `viewport`.
  && chmod -R a+rX /app \
