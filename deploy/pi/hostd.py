@@ -121,11 +121,18 @@ class Device:
                     link, ssid = "ethernet", ""
                 elif kind == "wifi":
                     link, ssid = "wifi", connection
+        details: dict[str, str] = {}
         if self.access_point_is_up():
             link, ssid, access_point = "access-point", "", True
+            # Its name and password again, so a device that was already showing its own
+            # network when this service started can still put them on the screen.
+            found = self.access_point_details(create=False)
+            if found:
+                details = {"access_point_ssid": found["ssid"],
+                           "access_point_password": found["password"]}
         return {"link": link, "ssid": ssid, "access_point": access_point,
                 "addresses": self.addresses(), "hostname": socket.gethostname(),
-                **self.vitals()}
+                **details, **self.vitals()}
 
     def addresses(self) -> list[str]:
         code, out, _ = self.run(["nmcli", "-t", "-f", "IP4.ADDRESS", "device", "show"])
@@ -239,13 +246,19 @@ class Device:
 
     # ----- its own network ----------------------------------------------------
 
-    def access_point_details(self) -> dict[str, str]:
-        """The name and password of this device's own network, made once and kept."""
+    def access_point_details(self, create: bool = True) -> dict[str, str]:
+        """The name and password of this device's own network, made once and kept.
+
+        Reading the device's status must not invent one: only putting the access point up
+        does that, which is why `create` exists.
+        """
         try:
             saved = json.loads(AP_FILE.read_text()) if AP_FILE.exists() else {}
         except (OSError, ValueError):
             saved = {}
         if not saved.get("ssid") or not saved.get("password"):
+            if not create:
+                return {}
             suffix = socket.gethostname().split(".")[0][-4:] or secrets.token_hex(2)
             saved = {"ssid": f"{AP_SSID_PREFIX}-{suffix}",
                      "password": secrets.token_urlsafe(12)}

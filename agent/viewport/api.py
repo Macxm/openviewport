@@ -197,7 +197,7 @@ def _direct_player_sources(config: AppConfig) -> list[str]:
 def create_app(config: AppConfig, runtime: Runtime | None = None, *, start_background: bool = True,
                host: HostControl | None = None) -> FastAPI:
     rt = runtime or Runtime(config)
-    device = host if host is not None else HostControl()
+    device = host if host is not None else rt.host
     admin = admin_from_config(config.auth, rt.secrets)
 
     @asynccontextmanager

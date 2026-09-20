@@ -17,6 +17,7 @@ const wallEl = document.getElementById('wall');
 const hudEl = document.getElementById('hud');
 const toastEl = document.getElementById('toast');
 const bannerEl = document.getElementById('banner');
+const setupEl = document.getElementById('setup');
 const clockEl = document.getElementById('clock');
 
 let snapshot = null;
@@ -288,9 +289,83 @@ class TileView {
 
 // ---------------------------------------------------------------- rendering
 
+/** A QR code from the agent's matrix, drawn rather than styled: no CSS, no dependency. */
+function qrCanvas(matrix, scale) {
+  const size = matrix.length;
+  const quiet = 4;                       // the margin a reader needs around the code
+  const canvas = document.createElement('canvas');
+  canvas.width = (size + quiet * 2) * scale;
+  canvas.height = canvas.width;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000000';
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      if (matrix[y][x]) ctx.fillRect((x + quiet) * scale, (y + quiet) * scale, scale, scale);
+    }
+  }
+  return canvas;
+}
+
+function setupStep(number, title, lines, matrix) {
+  const step = document.createElement('div');
+  step.className = 'setup-step';
+  const words = document.createElement('div');
+  words.className = 'setup-words';
+  const heading = document.createElement('h2');
+  heading.textContent = `${number}. ${title}`;
+  words.append(heading);
+  for (const [label, value] of lines) {
+    const row = document.createElement('p');
+    row.className = 'setup-line';
+    const name = document.createElement('span');
+    name.className = 'setup-label';
+    name.textContent = label;
+    const text = document.createElement('span');
+    text.className = 'setup-value';
+    text.textContent = value;              // never innerHTML: this comes from the device
+    row.append(name, text);
+    words.append(row);
+  }
+  step.append(words);
+  if (matrix && matrix.length) step.append(qrCanvas(matrix, 5));
+  return step;
+}
+
+/** How to reach a device that has no network yet. Nothing else on the screen is any use. */
+function renderSetup(setup) {
+  const same = JSON.stringify(setup || null) === setupEl.dataset.shown;
+  if (same) return;
+  setupEl.dataset.shown = JSON.stringify(setup || null);
+  setupEl.replaceChildren();
+  setupEl.hidden = !setup;
+  if (!setup) return;
+
+  const head = document.createElement('header');
+  const title = document.createElement('h1');
+  title.textContent = 'Set up this screen';
+  const hint = document.createElement('p');
+  hint.textContent = 'This device has no network yet, so it is showing its own.';
+  head.append(title, hint);
+  setupEl.append(head);
+
+  const steps = document.createElement('div');
+  steps.className = 'setup-steps';
+  steps.append(setupStep(1, 'Join this network', [['Network', setup.ssid],
+                                                  ['Password', setup.password]],
+                         setup.join_code));
+  if (setup.url) {
+    steps.append(setupStep(2, 'Open the settings', [['Address', setup.url.split('?')[0]]],
+                           setup.url_code));
+  }
+  setupEl.append(steps);
+}
+
 function render(snap) {
   const previousView = snapshot?.view?.index;
   snapshot = snap;
+  renderSetup(snap.setup);
   const { cols, rows } = snap.layout;
   wallEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
   wallEl.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
