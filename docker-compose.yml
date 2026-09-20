@@ -92,6 +92,9 @@ services:
       # Where people reach the wall from outside the container, which is the address the
       # setup screen puts on the television. Inside, it is always 8080.
       VIEWPORT_PUBLIC_PORT: ${VIEWPORT_PORT:-8080}
+      # A container is UTC unless it is told otherwise, and a screen schedule in UTC turns the
+      # television off at the wrong hour. The Pi installer fills this in from the device.
+      TZ: ${TZ:-}
       VIEWPORT_CONFIG: /config/viewport.yaml
       VIEWPORT_STATE_FILE: /data/viewport-state.json
       # Credentials for sources added in the admin page, and an admin password chosen

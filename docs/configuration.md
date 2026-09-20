@@ -41,6 +41,7 @@ Security.
 | `COMPOSE_PROFILES` | unset; `mock` in `.env.dev.example` | `mock` also starts the mock NVR |
 | `COMPOSE_FILE` | unset; dev files in `.env.dev.example` | `docker-compose.yml:docker-compose.dev.yml` adds live-edited web pages |
 | `VIEWPORT_BIND` | `127.0.0.1` | Where the wall is published. `0.0.0.0` for a screen elsewhere on the LAN, and then set the token and a password |
+| `TZ` | unset (UTC) | This device's time zone, e.g. `Europe/London`. The clock on the wall and the screen schedule are local time |
 | `VIEWPORT_HOST_FAKE` | unset | `1` pretends this machine is the appliance: the General section's network and power controls work against a device that exists only in memory, and say so. For development |
 | `VIEWPORT_HOST_FAKE_LINK` | `ethernet` | With the above, `none` starts that pretend device with no network at all, which is what brings up the setup screen |
 | `VIEWPORT_PORT` | `8080` | |
@@ -87,6 +88,9 @@ These protect both the NVR and the player. All editable at `/admin`.
 | `show_clock` | false | A clock at the top |
 | `offline_style` | `message` | `message` or `blank` for an offline camera |
 | `highlight_detections` | true | Outline and label a tile that is detecting |
+| `screen.enabled` | false | Turn the television off overnight, where the device can |
+| `screen.off_at` | `23:00` | Local time, so `TZ` has to be right |
+| `screen.on_at` | `06:30` | Crossing midnight is the ordinary case |
 | `hide_cursor_seconds` | 3 | 0 keeps the cursor |
 
 ## detection — a camera goes primary

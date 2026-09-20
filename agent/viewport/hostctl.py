@@ -126,6 +126,9 @@ class HostControl:
             raise HostError("a connection is either ethernet or wifi")
         return await self._call("prefer", link=link)
 
+    async def display(self, on: bool) -> dict[str, Any]:
+        return await self._call("display", on=bool(on))
+
     async def reboot(self) -> dict[str, Any]:
         return await self._call("reboot")
 
@@ -175,6 +178,7 @@ class FakeHost:
     # network at all, which is when the setup screen appears.
     link: str = field(default_factory=lambda: os.environ.get("VIEWPORT_HOST_FAKE_LINK", "ethernet"))
     ssid: str = ""
+    display_on: bool = True
     ap_ssid: str = "OpenViewport-f00d"
     ap_password: str = "join-me-here-42"
     address: str = "192.0.2.10"
@@ -193,6 +197,7 @@ class FakeHost:
             details = ({"access_point_ssid": self.ap_ssid, "access_point_password": self.ap_password}
                        if self.access_point else {})
             return {**details,
+                    "can_control_display": True,
                     "link": "access-point" if self.access_point else self.link,
                     "ssid": self.ssid, "addresses": [self.address], "hostname": "openviewport",
                     "access_point": self.access_point, "simulated": True,
@@ -227,6 +232,9 @@ class FakeHost:
         if op == "prefer":
             self.link = args["link"]
             return {"link": self.link}
+        if op == "display":
+            self.display_on = bool(args["on"])
+            return {"display": "on" if self.display_on else "off", "how": "simulated"}
         if op in ("reboot", "shutdown"):
             return {"accepted": True, "simulated": True}
         raise HostError(f"the host helper does not know how to {op}")

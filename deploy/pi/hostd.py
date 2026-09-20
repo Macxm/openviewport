@@ -70,10 +70,12 @@ def check_psk(psk: Any) -> str:
     return psk
 
 
-def run(argv: list[str], timeout: float = COMMAND_TIMEOUT) -> tuple[int, str, str]:
-    """One command, as a list, never through a shell."""
+def run(argv: list[str], timeout: float = COMMAND_TIMEOUT,
+        feed: str | None = None) -> tuple[int, str, str]:
+    """One command, as a list, never through a shell. `feed` goes to its standard input."""
     try:
-        done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False,
+                              input=feed)
     except FileNotFoundError:
         raise Refused(f"{argv[0]} is not installed on this device") from None
     except subprocess.TimeoutExpired:
@@ -132,6 +134,8 @@ class Device:
                            "access_point_password": found["password"]}
         return {"link": link, "ssid": ssid, "access_point": access_point,
                 "addresses": self.addresses(), "hostname": socket.gethostname(),
+                # Whether a screen can be turned off at all, so the settings page can say.
+                "can_control_display": bool(shutil.which("cec-client") or shutil.which("vcgencmd")),
                 **details, **self.vitals()}
 
     def addresses(self) -> list[str]:
@@ -290,6 +294,29 @@ class Device:
         return {**self.status(), "access_point_ssid": details["ssid"],
                 "access_point_password": details["password"]}
 
+    # ----- the screen ---------------------------------------------------------
+
+    def display(self, on: bool) -> dict[str, Any]:
+        """Turn the television on or off.
+
+        HDMI-CEC asks the television itself, which is what people mean by "off": the panel is
+        dark and it draws almost nothing. Where there is no CEC, the Pi can stop driving the
+        output instead, which blanks the picture but leaves the set awake.
+        """
+        if shutil.which("cec-client"):
+            command = "on 0" if on else "standby 0"
+            code, _, err = self.run(["cec-client", "-s", "-d", "1"], timeout=20, feed=command)
+            if code == 0:
+                return {"display": "on" if on else "off", "how": "cec"}
+            log.warning("cec-client refused (%s); falling back to the output itself", err[:120])
+        if shutil.which("vcgencmd"):
+            code, _, err = self.run(["vcgencmd", "display_power", "1" if on else "0"], timeout=10)
+            if code == 0:
+                return {"display": "on" if on else "off", "how": "output"}
+            raise Refused(err or "this device could not change its output")
+        raise Refused("this device has no way to turn a screen off "
+                      "(install cec-utils for HDMI-CEC)")
+
     # ----- power --------------------------------------------------------------
 
     def reboot(self) -> dict[str, Any]:
@@ -317,6 +344,8 @@ def handle(device: Device, request: dict[str, Any]) -> dict[str, Any]:
         return device.prefer(link if isinstance(link, str) else "")
     if op == "access-point":
         return device.access_point(bool(request.get("on")))
+    if op == "display":
+        return device.display(bool(request.get("on")))
     if op == "reboot":
         return device.reboot()
     if op == "shutdown":

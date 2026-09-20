@@ -87,6 +87,16 @@ fi
 set_env VIEWPORT_BIND "$bind"
 set_env VIEWPORT_PORT "$port"
 
+# The wall's clock and the overnight screen schedule are this device's local time, and a
+# container is UTC unless it is told which zone it is in.
+if [ -z "$(get_env TZ)" ] && command -v timedatectl >/dev/null 2>&1; then
+    zone=$(timedatectl show -p Timezone --value 2>/dev/null || true)
+    if [ -n "$zone" ]; then
+        set_env TZ "$zone"
+        say "Time zone: $zone, taken from this device"
+    fi
+fi
+
 if [ -z "$(get_env VIEWPORT_API_TOKEN)" ]; then
     token=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null \
             || dd if=/dev/urandom bs=32 count=1 2>/dev/null | base64 | tr -d '=+/' )
@@ -103,8 +113,10 @@ if [ "$kiosk" = yes ]; then
     browser_pkg=chromium-browser
     apt-cache show chromium-browser >/dev/null 2>&1 || browser_pkg=chromium
     say "Installing cage and $browser_pkg for the screen"
+    # cec-utils is what lets the screen schedule turn the television off rather than just
+    # blanking it. It is small, and useless to install later without knowing to.
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        cage "$browser_pkg" curl
+        cage "$browser_pkg" curl cec-utils
     [ -n "$user" ] && usermod -aG video,input,render,tty "$user"
 fi
 

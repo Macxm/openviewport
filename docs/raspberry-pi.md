@@ -144,6 +144,22 @@ layouts to a fresh install and starts the setup guide, keeping the admin passwor
 login. *Reset the device* forgets those too, and the wifi network with them: for handing the
 device to someone else. The agent restarts itself either way, and comes back on what is left.
 
+## Turning the television off at night
+
+*Display → Screen schedule* asks the television to switch off overnight and come back in the
+morning. It is sent over HDMI-CEC, so the set really does go off rather than showing black;
+where CEC is unavailable the device stops driving its output instead, which blanks the picture
+but leaves the television awake.
+
+```bash
+sudo apt install -y cec-utils
+```
+
+The times are the device's own, so its time zone has to be right — the installer fills `TZ` in
+from the device, and *General* shows what it thinks the time is. Most televisions need
+"HDMI-CEC" switched on in their own settings, under whatever name the manufacturer invented for
+it: Anynet+, Bravia Sync, Simplink, Viera Link.
+
 ## Updating
 
 ```bash
