@@ -41,6 +41,8 @@ Security.
 | `COMPOSE_PROFILES` | unset; `mock` in `.env.dev.example` | `mock` also starts the mock NVR |
 | `COMPOSE_FILE` | unset; dev files in `.env.dev.example` | `docker-compose.yml:docker-compose.dev.yml` adds live-edited web pages |
 | `VIEWPORT_BIND` | `127.0.0.1` | Where the wall is published. `0.0.0.0` for a screen elsewhere on the LAN, and then set the token and a password |
+| `VIEWPORT_HOST_FAKE` | unset | `1` pretends this machine is the appliance: the General section's network and power controls work against a device that exists only in memory, and say so. For development |
+| `VIEWPORT_HOST_FAKE_LINK` | `ethernet` | With the above, `none` starts that pretend device with no network at all, which is what brings up the setup screen |
 | `VIEWPORT_PORT` | `8080` | |
 | `VIEWPORT_API_TOKEN` | *(blank)* | Lets a screen watch the wall. Blank leaves it open |
 | `VIEWPORT_ADMIN_USERNAME` | `admin` | |

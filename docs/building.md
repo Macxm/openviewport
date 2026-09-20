@@ -96,6 +96,13 @@ The pages run under a strict content security policy: no inline scripts or style
 and connections only to their own origin. Set text with `textContent`, never `innerHTML` with
 data in it.
 
+Development machines are not appliances, so the General section's network and power controls
+would have nothing to drive. `.env.dev.example` sets `VIEWPORT_HOST_FAKE=1`, which stands in a
+device that exists only in memory: joining a network, a refused password, restarting and
+resetting all behave, and the page says plainly that they are simulated. Adding
+`VIEWPORT_HOST_FAKE_LINK=none` starts it with no network at all, which is what brings up the
+setup screen on the wall.
+
 The mock NVR can be told to behave like awkward hardware:
 
 ```bash

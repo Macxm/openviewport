@@ -82,9 +82,48 @@ Each returns the updated `/api/config`. Invalid values are `422`; removing a lay
 use is `409`. In the `cameras` list, `name` is the name as shown and `reported_name` the NVR's;
 `camera_settings` also holds settings for cameras not discovered right now.
 
+## The device it runs on
+
+`GET /api/device` needs the token (or an admin session) and reads what the device knows about
+itself: its name, version, camera count, and — where a host helper is installed — how it is
+connected, at what address, its uptime, temperature and free disk.
+
+```json
+{
+  "name": "Hallway", "version": "0.1.0", "cameras": 3,
+  "host": {"kind": "helper", "link": "wifi", "ssid": "Kitchen",
+           "addresses": ["192.168.1.50"], "access_point": false,
+           "uptime_seconds": 486120, "temperature_c": 52.1, "throttled": false}
+}
+```
+
+`host.kind` is `helper` on a device with one, `fake` on a development machine pretending to be
+one, and `none` where there is neither — in which case the rest of the block is absent and the
+operations below refuse.
+
+Everything that *changes* the device needs the admin password, not just the token:
+
+| | |
+|---|---|
+| `GET /api/device/networks` | wifi networks in range, strongest first |
+| `POST /api/device/network/join` | `{"ssid": "…", "password": "…"}` |
+| `POST /api/device/network/forget` | `{"ssid": "…"}` |
+| `POST /api/device/network/prefer` | `{"link": "ethernet"}` or `"wifi"` |
+| `POST /api/device/access-point` | `{"on": true}` — show the device's own network |
+| `POST /api/device/reboot`, `/shutdown` | what they say |
+| `POST /api/device/reset` | `{"scope": "configuration"}` or `{"scope": "device", "forget_network": true}` |
+
+None of this happens in the agent's container. It is passed to a small service on the host
+over a Unix socket, which accepts those operations and nothing else
+([Raspberry Pi](raspberry-pi.md)).
+
 ## WebSockets
 
 ### `/api/wall/ws` — the renderer's channel
+
+The snapshot carries a `setup` block while the device has no network but its own: the network
+name, its password, the address to open, and a QR matrix for each (rows of 0 and 1, which the
+renderer draws). It is `null` the rest of the time, which is almost always.
 
 Receives a snapshot whenever anything changes:
 
