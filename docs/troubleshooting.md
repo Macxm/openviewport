@@ -85,6 +85,20 @@ Detection focus. Either raise `min_focus_seconds`, narrow `triggers` (motion fir
 than person), switch `action` to `highlight`, or turn detection off. Any interaction pauses
 it for `manual_override_seconds`.
 
+## The screen says "Set up this screen"
+
+The device has no network — no cable, and no wifi it knows — so it has put up its own and is
+showing how to join it. Scan the first code with a phone, or join the network by hand with the
+name and password on screen, then scan the second code (or type the address) to open the
+settings and tell it about your wifi.
+
+If it should be on a cable: plug it in, and the screen goes back to the cameras within about
+fifteen seconds. If it was on wifi and this appeared, the network it knew is gone or its
+password has changed.
+
+Nothing to scan? The codes are drawn from the device itself. If only the words appear, the
+address was too long to encode — join with the name and password and type the address.
+
 ## A tile stays marked, and it is a parked car (or the bins)
 
 Reolink's detection answers say what a camera **can see**, not what just changed: a car on the

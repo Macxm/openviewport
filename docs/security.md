@@ -145,6 +145,32 @@ docker compose exec go2rtc python3 -c "import urllib.request; print(urllib.reque
 `agent/tests/test_deployment.py` checks all of this in the files that set it, so an edit to the
 compose file cannot quietly undo it.
 
+## The one part that runs as root
+
+Joining a wifi network, restarting and powering down need root on the device. The agent has
+none of it: it runs read-only, without Linux capabilities, as a system user. So those
+operations live in a separate service, `openviewport-hostd`, which systemd starts and which
+listens on a Unix socket mounted into the agent's container read-only.
+
+What keeps that safe to run as root is what it will not do:
+
+- it answers eight operations — status, networks, join, forget, access-point, prefer, reboot,
+  shutdown — and refuses anything else;
+- it checks every argument again on arrival, whatever the caller claimed to have checked;
+- nothing reaches a shell: every command is an argument list, so a network name full of shell
+  characters stays a network name;
+- there is **no operation that runs a command, a script or a path of the caller's choosing**.
+
+The socket is `root:10001`, mode 0660, so only the agent may speak to it, and systemd takes
+away everything the service does not need (`ProtectSystem=strict`, `NoNewPrivileges`, only
+`AF_UNIX` and `AF_NETLINK`, `@system-service` syscalls).
+
+The consequence to be clear about: **someone who learns the admin password can move the device
+to another network, restart it, or reset it** — which is what someone standing next to it could
+do anyway. They cannot make it run anything.
+
+Where no helper is installed, the device section shows what it can read and refuses the rest.
+
 ## HTTPS with a reverse proxy
 
 Caddy obtains and renews a certificate by itself. For a device reached as `cams.example.com`:

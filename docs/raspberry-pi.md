@@ -62,6 +62,28 @@ to and no desktop behind it.
 
 ## 4. First run
 
+### With no network yet
+
+A device with no cable and no wifi cannot be reached at all, so it stops being a camera wall
+and becomes its own way in: it puts up a wifi network of its own, and the television shows the
+network name, its password, and a QR code for each.
+
+1. Scan the first code with a phone — or join the network by hand with the name and password
+   on the screen.
+2. Scan the second code, which opens the settings on that device.
+3. Choose a password, then tell it about your wifi under **General → Wi-Fi**.
+
+When it joins your network, its own goes away and the screen returns to the cameras. Rejoin
+your usual wifi on the phone, and the settings are then at `http://<the pi>.local:8080/admin`.
+
+The access point's password is made once, by the device, and kept; it is not printed in the
+installer's output and not stored in the repository. Anyone who can see the television can read
+it, which is the point: being in the room is the permission.
+
+### With a network already
+
+
+
 Open the link the installer printed, from your phone or laptop:
 
 ```

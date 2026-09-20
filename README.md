@@ -77,6 +77,13 @@ and **Security**.
 
 ![The Detection section](docs/images/admin-detection.png)
 
+The **General** section is what the device says about itself — version, uptime, temperature,
+disk, which network it is on and at what address — and what can be done to it: join a wifi
+network, prefer ethernet, restart, shut down, or start again from scratch. Reading it needs no
+password; changing anything does.
+
+![The General section](docs/images/admin-general.png)
+
 The first time you open it, a short guide walks you through protecting the settings, connecting
 your cameras, naming them and choosing what the wall shows.
 
@@ -86,6 +93,17 @@ your cameras, naming them and choosing what the wall shows.
 
 Settings are shown but locked until you unlock them with the admin password, so the screen in
 the hallway cannot be reconfigured by anyone who walks past it.
+
+## A device with no network sets itself up
+
+Plugged in somewhere new, with no cable and no wifi it knows, there is no address for anyone to
+open — so the television becomes the way in. The device puts up a wifi network of its own and
+shows how to join it, with a code to scan for the network and another for the settings page.
+
+![The setup screen: join this network, then open the settings](docs/images/setup-screen.png)
+
+Tell it about your wifi and its own network disappears, the screen goes back to the cameras,
+and the settings move to `http://<the device>.local:8080/admin`.
 
 ## On a Raspberry Pi
 
@@ -125,6 +143,35 @@ hands out camera passwords; credentials never reach logs, API responses, the set
 the screen; the pages run under a strict content security policy and refuse cross-site requests
 and DNS rebinding; every container is read-only and without capabilities; the wall is on
 loopback until you publish it deliberately. [Security](docs/security.md) has the details.
+
+## What it does today
+
+- **A camera wall that protects the recorder** — 13 built-in layouts and your own, several
+  views, instant full screen, and a stream budget that keeps one full-resolution stream at a
+  time so the vendor's phone app still works.
+- **Reolink, ONVIF and plain RTSP**, added and removed while it runs.
+- **Every camera set up on its own** — name, hidden or not, always HD, always SD or automatic,
+  how the picture fills its tile, and what its streams actually are.
+- **A camera comes forward when something happens** — person, vehicle, animal or motion, full
+  screen or promoted or simply marked, and only for things that *arrive*.
+- **An admin page that works on a phone**, locked until you unlock it, with a setup guide on
+  first use.
+- **Device control** — network, restart, shut down and reset, from the same page.
+- **Onboarding with no network at all**, over the device's own wifi and a code on the TV.
+- **A Raspberry Pi appliance** — one installer, services at boot, a browser on the TV.
+- **Security as a requirement** — a token to watch, a password to change, credentials kept out
+  of logs and responses, hardened containers, and root confined to one small service.
+- **Tested** — 607 unit tests and 37 browser tests that play real video, run on every change.
+
+## What is coming
+
+- **Updating from the settings page**, with an automatic rollback if the new version does not
+  come up.
+- **A display schedule** — the TV off at night and on in the morning, over HDMI-CEC.
+- **Raspberry Pi measurements**, and a native renderer if the browser proves to be the limit.
+- **A ready-made Pi image**, so the first boot is the setup screen.
+- **Push events from Reolink** instead of polling for detections.
+- **More vendors**, driven by what people report their hardware doing.
 
 ## Documentation
 

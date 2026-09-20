@@ -89,6 +89,9 @@ services:
       # listener out from under the mapping and the wall answers nothing at all.
       VIEWPORT_HOST: 0.0.0.0
       VIEWPORT_PORT: 8080
+      # Where people reach the wall from outside the container, which is the address the
+      # setup screen puts on the television. Inside, it is always 8080.
+      VIEWPORT_PUBLIC_PORT: ${VIEWPORT_PORT:-8080}
       VIEWPORT_CONFIG: /config/viewport.yaml
       VIEWPORT_STATE_FILE: /data/viewport-state.json
       # Credentials for sources added in the admin page, and an admin password chosen

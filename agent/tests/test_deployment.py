@@ -60,6 +60,8 @@ def test_the_agent_listens_where_the_mapping_and_the_healthcheck_look():
     environment = SERVICES["agent"]["environment"]
     assert str(environment["VIEWPORT_PORT"]) == "8080"
     assert environment["VIEWPORT_HOST"] == "0.0.0.0"
+    # The port people actually reach, which is what the setup screen shows on the TV.
+    assert environment["VIEWPORT_PUBLIC_PORT"] == "${VIEWPORT_PORT:-8080}"
     assert SERVICES["agent"]["ports"][0].endswith(":8080")
 
 
