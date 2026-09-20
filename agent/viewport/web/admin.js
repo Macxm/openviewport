@@ -1172,7 +1172,43 @@ function renderDisplay() {
       setting({ label: 'Hide the mouse pointer after', help: 'Once the mouse stops moving. 0 keeps it visible.',
                 control: f.number('hide_cursor_seconds', { min: 0, max: 120, integer: true, unit: 's' }), fit: true }),
     ]),
+    screenSchedule(),
   );
+}
+
+/** Turning the television off overnight, where the device can do it at all. */
+function screenSchedule() {
+  const screen = draft.display.screen
+    || (draft.display.screen = { enabled: false, off_at: '23:00', on_at: '06:30' });
+  const s = binder(screen, changed);
+
+  const timeOf = (key) => {
+    const input = textOf(screen[key], { type: 'time' });
+    input.addEventListener('change', () => {
+      if (input.value) { screen[key] = input.value; changed(); }
+    });
+    return input;
+  };
+  const offRow = setting({ label: 'Off at', control: timeOf('off_at'), fit: true });
+  const onRow = setting({ label: 'On again at', control: timeOf('on_at'), fit: true });
+  const showRows = () => { offRow.hidden = onRow.hidden = !screen.enabled; };
+  showRows();
+
+  const rows = [
+    setting({ label: 'Turn the screen off overnight',
+              help: 'The television is asked to switch off, not just go dark, so it uses almost nothing.',
+              info: 'Over HDMI-CEC where the television supports it; otherwise the device stops '
+                  + 'driving its output, which blanks the picture but leaves the set awake. Times '
+                  + 'are this device\'s own, so its time zone has to be right.',
+              control: s.switch('enabled', { after: showRows }), fit: true }),
+    offRow,
+    onRow,
+  ];
+  const note = device && device.host && device.host.kind !== 'none'
+    && device.host.can_control_display === false
+    ? 'This device has no way to turn a screen off: install cec-utils for HDMI-CEC.'
+    : undefined;
+  return group('Screen schedule', rows, note ? { note } : undefined);
 }
 
 // ---------------------------------------------------------------- detection

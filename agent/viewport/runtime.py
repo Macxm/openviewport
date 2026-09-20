@@ -7,6 +7,7 @@ import logging
 import os
 import random
 import time
+from datetime import datetime, time as time_of_day
 from typing import Any
 from urllib.parse import quote
 
@@ -29,6 +30,25 @@ log = logging.getLogger(__name__)
 
 # How often the device is asked how it is connected. Slow: it changes when someone changes it.
 DEVICE_POLL_SECONDS = 15.0
+
+
+def screen_should_be_on(now: time_of_day, off_at: str, on_at: str) -> bool:
+    """Whether the television should be showing anything at this minute.
+
+    Off at 23:00 and on at 06:30 crosses midnight, which is the ordinary case rather than the
+    exception, so it is the shape this is written around. Equal times mean the schedule says
+    nothing, and the screen stays on.
+    """
+    try:
+        off = time_of_day.fromisoformat(off_at)
+        on = time_of_day.fromisoformat(on_at)
+    except ValueError:
+        return True
+    if off == on:
+        return True
+    if off < on:                       # a daytime nap: off at 13:00, on again at 14:00
+        return not (off <= now < on)
+    return on <= now < off             # the usual: awake between morning and night
 
 # Renderers report every 5 s, so this is roughly 15 s of a stream refusing to play.
 FAILURES_BEFORE_FALLBACK = 3
@@ -83,6 +103,7 @@ class Runtime:
                  secrets_store: "SecretStore | None" = None, host: "HostControl | None" = None):
         self.config = config
         self.host = host if host is not None else HostControl()
+        self._screen_on: bool | None = None                 # what the schedule last asked for
         self.store = store if store is not None else ConfigStore()
         adapters = adapters if adapters is not None else [build_adapter(s) for s in config.sources]
         refresh = {s.id: s.refresh_seconds for s in config.sources}
@@ -336,11 +357,34 @@ class Runtime:
         while True:
             try:
                 await self._offer_setup()
+                await self._apply_screen_schedule()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:                       # never let this stop the wall
                 log.debug("device check failed: %s", safe_error(exc))
             await asyncio.sleep(DEVICE_POLL_SECONDS)
+
+    async def _apply_screen_schedule(self) -> None:
+        """Turn the television off overnight, and on again in the morning.
+
+        Only on the minute it changes, not on every pass: a television being told to turn on
+        every fifteen seconds is a television nobody can turn off by hand.
+        """
+        screen = self.config.display.screen
+        if not screen.enabled or not self.host.available:
+            self._screen_on = None
+            return
+        wanted = screen_should_be_on(datetime.now().time(), screen.off_at, screen.on_at)
+        if wanted == self._screen_on:
+            return
+        try:
+            await self.host.display(wanted)
+        except HostError as exc:
+            log.warning("could not turn the screen %s: %s", "on" if wanted else "off", exc)
+            self._screen_on = None                          # try again on the next pass
+            return
+        log.info("screen turned %s by the schedule", "on" if wanted else "off")
+        self._screen_on = wanted
 
     async def _offer_setup(self) -> None:
         if not self.host.available:

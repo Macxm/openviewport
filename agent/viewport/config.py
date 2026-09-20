@@ -103,6 +103,21 @@ class LayoutConfig(BaseModel):
         return build_layout(self.id, self.cols, self.rows, [t.model_dump() for t in self.tiles])
 
 
+class ScreenSchedule(BaseModel):
+    """When the television should be off.
+
+    Times are the device's own local time, which in Docker means whatever TZ the container is
+    given: an appliance that thinks it is in UTC turns the screen off at the wrong hour.
+    Crossing midnight is the normal case, so 23:00 to 06:30 means exactly what it looks like.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    off_at: str = Field("23:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    on_at: str = Field("06:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
 class DisplayConfig(BaseModel):
     """How the renderer draws the wall. Renderers apply these; they never pick streams."""
 
@@ -115,6 +130,8 @@ class DisplayConfig(BaseModel):
     offline_style: Literal["message", "blank"] = "message"
     highlight_detections: bool = True
     hide_cursor_seconds: int = Field(3, ge=0, le=120)
+    # Turning the screen off overnight, where the device can (HDMI-CEC, or its own output).
+    screen: ScreenSchedule = Field(default_factory=ScreenSchedule)
 
 
 DetectionType = Literal["person", "vehicle", "animal", "face", "motion"]
