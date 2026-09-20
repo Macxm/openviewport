@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
 import time
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -15,6 +17,8 @@ from .adapters.onvif import OnvifError
 from .adapters.reolink import ReolinkError
 from .config import AppConfig
 from .go2rtc import Go2rtcClient, StreamRegistry
+from . import qr
+from .hostctl import HostControl, HostError
 from .models import Camera, Quality
 from .credentials import redact, register_secret, safe_error
 from .secretstore import SecretStore
@@ -22,6 +26,9 @@ from .store import EDITABLE_SOURCE_FIELDS, ConfigStore
 from .wall import WallController
 
 log = logging.getLogger(__name__)
+
+# How often the device is asked how it is connected. Slow: it changes when someone changes it.
+DEVICE_POLL_SECONDS = 15.0
 
 # Renderers report every 5 s, so this is roughly 15 s of a stream refusing to play.
 FAILURES_BEFORE_FALLBACK = 3
@@ -73,8 +80,9 @@ class SourceState:
 class Runtime:
     def __init__(self, config: AppConfig, adapters: list[SourceAdapter] | None = None,
                  go2rtc: Go2rtcClient | None = None, store: ConfigStore | None = None,
-                 secrets_store: "SecretStore | None" = None):
+                 secrets_store: "SecretStore | None" = None, host: "HostControl | None" = None):
         self.config = config
+        self.host = host if host is not None else HostControl()
         self.store = store if store is not None else ConfigStore()
         adapters = adapters if adapters is not None else [build_adapter(s) for s in config.sources]
         refresh = {s.id: s.refresh_seconds for s in config.sources}
@@ -107,6 +115,7 @@ class Runtime:
         self._tasks.append(asyncio.create_task(self._detection_loop(), name="detection"))
         # Also always running: the rotation interval is editable at runtime.
         self._tasks.append(asyncio.create_task(self._cycle_loop(), name="cycle-views"))
+        self._tasks.append(asyncio.create_task(self._device_loop(), name="device"))
 
     def _watch(self, state: SourceState) -> None:
         state.task = asyncio.create_task(self._discovery_loop(state),
@@ -314,6 +323,60 @@ class Runtime:
         while True:
             await asyncio.sleep(1)
             self.wall.tick()
+
+    async def _device_loop(self) -> None:
+        """Watch how the device is connected, and offer a way in when it is not.
+
+        A box wired to a TV with no network is useless and cannot be told anything: there is
+        no address to open. So when there is neither ethernet nor wifi it puts up its own
+        network, and the wall shows how to join it. Joining a real network takes that down
+        again (the helper does it), and nothing here interferes with a device that is already
+        connected.
+        """
+        while True:
+            try:
+                await self._offer_setup()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:                       # never let this stop the wall
+                log.debug("device check failed: %s", safe_error(exc))
+            await asyncio.sleep(DEVICE_POLL_SECONDS)
+
+    async def _offer_setup(self) -> None:
+        if not self.host.available:
+            self.wall.set_setup(None)
+            return
+        status = await self.host.status()
+        if status.get("link") == "none" and not status.get("access_point"):
+            log.warning("no network: putting up this device's own so it can be set up")
+            try:
+                await self.host.access_point(True)
+                # Read it again rather than patching the old answer: putting the access point
+                # up changes the address, and that address is what goes on the screen.
+                status = await self.host.status()
+            except HostError as exc:
+                log.warning("could not put up the setup network: %s", exc)
+        if not status.get("access_point"):
+            self.wall.set_setup(None)
+            return
+        ssid = str(status.get("access_point_ssid") or "")
+        password = str(status.get("access_point_password") or "")
+        if not ssid:
+            self.wall.set_setup(None)
+            return
+        address = next((a for a in status.get("addresses") or []), "")
+        port = os.environ.get("VIEWPORT_PUBLIC_PORT", "8080")
+        url = f"http://{address}:{port}/admin" if address else ""
+        if url and self.config.auth.token:
+            url += f"?token={quote(self.config.auth.token)}"
+        setup: dict[str, Any] = {"ssid": ssid, "password": password, "url": url}
+        try:
+            setup["join_code"] = qr.encode(qr.wifi_join(ssid, password))
+            if url:
+                setup["url_code"] = qr.encode(url)
+        except qr.TooLong:                                  # then the words alone will do
+            pass
+        self.wall.set_setup(setup)
 
     async def _cycle_loop(self) -> None:
         """Rotate through the views.

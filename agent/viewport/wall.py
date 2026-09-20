@@ -58,6 +58,9 @@ class WallController:
         self._tile_cameras: dict[str, str | None] = {}
         self._effective_fullscreen: str | None = None
         # Detection focus.
+        # How to set this device up, when it has no network of its own to be reached on.
+        # Presentation only, like display: the wall carries it, the renderer draws it.
+        self.setup: dict[str, Any] | None = None
         self.detections: dict[str, frozenset[str]] = {}
         self._detections_at = float("-inf")
         # camera id -> (what it saw, when), so a badge can linger after the detection stops.
@@ -459,6 +462,8 @@ class WallController:
             "tiles": tiles,
             "budget": summarize(self._assignments, self.limits),
             "display": self.config.display.model_dump(),
+            # Present only while this device has no network but its own: how to join it.
+            "setup": self.setup,
             "player": {
                 "go2rtc_url": self.config.go2rtc.public_url,
                 "transport": self.config.go2rtc.player_transport,
@@ -476,6 +481,13 @@ class WallController:
                 "reason": focus.reason, "presentation": presentation}
 
     # ----- subscriptions --------------------------------------------------
+
+    def set_setup(self, setup: dict[str, Any] | None) -> None:
+        """What the screen should say about joining this device, or nothing to say."""
+        if setup == self.setup:
+            return
+        self.setup = setup
+        self._publish()
 
     def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=8)

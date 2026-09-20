@@ -171,8 +171,12 @@ class FakeHost:
     password fails — so the admin page and the browser tests exercise the same paths.
     """
 
-    link: str = "ethernet"
+    # "none" makes a development stack behave like a device fresh out of the box, with no
+    # network at all, which is when the setup screen appears.
+    link: str = field(default_factory=lambda: os.environ.get("VIEWPORT_HOST_FAKE_LINK", "ethernet"))
     ssid: str = ""
+    ap_ssid: str = "OpenViewport-f00d"
+    ap_password: str = "join-me-here-42"
     address: str = "192.0.2.10"
     access_point: bool = False
     saved: set[str] = field(default_factory=set)
@@ -186,7 +190,10 @@ class FakeHost:
     def call(self, op: str, **args: Any) -> dict[str, Any]:
         self.actions.append(op)
         if op == "status":
-            return {"link": "access-point" if self.access_point else self.link,
+            details = ({"access_point_ssid": self.ap_ssid, "access_point_password": self.ap_password}
+                       if self.access_point else {})
+            return {**details,
+                    "link": "access-point" if self.access_point else self.link,
                     "ssid": self.ssid, "addresses": [self.address], "hostname": "openviewport",
                     "access_point": self.access_point, "simulated": True,
                     "uptime_seconds": 4242, "temperature_c": 47.5, "throttled": False,
@@ -213,7 +220,10 @@ class FakeHost:
             self.access_point = bool(args["on"])
             if self.access_point:
                 self.link, self.ssid = "access-point", ""
-            return {"access_point": self.access_point}
+                self.address = "10.42.0.1"
+                return {"access_point": True, "access_point_ssid": self.ap_ssid,
+                        "access_point_password": self.ap_password}
+            return {"access_point": False}
         if op == "prefer":
             self.link = args["link"]
             return {"link": self.link}

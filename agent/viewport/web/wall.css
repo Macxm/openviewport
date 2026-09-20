@@ -225,3 +225,90 @@ body.blank-offline .tile[data-state="idle"] .placeholder { display: none; }
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
+
+/* ---- Setting the device up, when it has no network but its own ------------------
+   This covers the wall: a screen with nothing to show is better used for the way in. */
+
+#setup {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4vh;
+  background: var(--bg);
+  padding: 4vh 4vw;
+  text-align: center;
+}
+
+#setup header h1 {
+  font-size: clamp(28px, 4.4vw, 64px);
+  margin: 0 0 .4em;
+}
+
+#setup header p {
+  color: var(--muted);
+  font-size: clamp(15px, 1.6vw, 24px);
+  margin: 0;
+}
+
+.setup-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4vw;
+  justify-content: center;
+  align-items: stretch;
+}
+
+/* Each step is its words beside the code that saves typing them. */
+.setup-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2.5vw;
+  background: var(--tile-bg);
+  border-radius: 16px;
+  padding: 3vh 3vw;
+  text-align: left;
+  /* One width for both, so the steps line up however the screen is shaped. */
+  width: min(560px, 92vw);
+}
+
+.setup-step canvas {
+  border-radius: 8px;
+  height: auto;
+  width: clamp(120px, 14vw, 240px);
+  image-rendering: pixelated;      /* a QR is squares: never blur them */
+}
+
+.setup-words h2 {
+  font-size: clamp(18px, 2vw, 30px);
+  margin: 0 0 .6em;
+}
+
+.setup-line {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 .7em;
+}
+
+.setup-label {
+  color: var(--muted);
+  font-size: clamp(12px, 1.1vw, 16px);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* The one thing someone has to copy by hand, so it is the biggest thing here. */
+.setup-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(18px, 2.2vw, 34px);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .setup-step { flex-direction: column; text-align: center; }
+  .setup-line { align-items: center; }
+}
