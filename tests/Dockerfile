@@ -8,7 +8,7 @@
 # looks for its browsers by build number, so a mismatch cannot launch anything. Dependabot
 # bumps this line alone: the build then stops at the check below with the fix spelled out,
 # rather than failing halfway through the browser suite.
-FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
+FROM mcr.microsoft.com/playwright/python:v1.64.1-noble
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /repo
