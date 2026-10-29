@@ -1,7 +1,7 @@
 # Mock Reolink NVR for development.
 # The official go2rtc image is built on python:*-alpine and already ships go2rtc,
 # ffmpeg and Python, so only a font (for the test-pattern labels) and our deps are added.
-FROM alexxit/go2rtc:1.9.14
+FROM alexxit/go2rtc:1.9.15
 
 RUN apk add --no-cache font-dejavu
 
