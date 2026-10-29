@@ -33,7 +33,7 @@ x-hardened: &hardened
 # tini -g signals the whole pipeline, so go2rtc still stops cleanly.
 x-go2rtc: &go2rtc
   <<: *hardened
-  image: alexxit/go2rtc:1.9.14
+  image: alexxit/go2rtc:1.9.15
   user: "10001:10001"
   entrypoint: ["/sbin/tini", "-g", "--", "sh", "-c"]
   command:
